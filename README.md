@@ -6,9 +6,9 @@ shared infrastructure and product documentation.
 ## Project layout
 
 - `frontend/` - Vite-based user interface, organized by app shell, shared
-  components, and product features.
+  components, and career-management features.
 - `backend/` - FastAPI application, organized into core infrastructure,
-  feature modules, and AI capabilities.
+  feature modules, AI capabilities, and external integrations.
 - `infrastructure/` - Docker, proxy, scripts, and monitoring configuration.
 - `docs/` - Product, architecture, API, security, testing, and deployment
   documentation.
