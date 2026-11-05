@@ -1,0 +1,12 @@
+export interface HealthStatus {
+  status: "ok";
+  database: "connected";
+}
+
+export async function fetchHealth(signal?: AbortSignal): Promise<HealthStatus> {
+  const response = await fetch("/api/v1/health", { signal });
+  if (!response.ok) {
+    throw new Error(`Health check failed with status ${response.status}`);
+  }
+  return (await response.json()) as HealthStatus;
+}

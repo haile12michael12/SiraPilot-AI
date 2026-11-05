@@ -3,13 +3,30 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sira-pilot-ai-backend"
+name = "sirapilot-ai-backend"
 version = "0.1.0"
-requires-python = ">=3.10"
+description = "SiraPilot AI API and background workers"
+requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.115,<1.0",
-    "uvicorn[standard]>=0.34,<1.0",
+    "alembic>=1.14,<2",
+    "celery[redis]>=5.4,<6",
+    "fastapi>=0.115,<1",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic-settings>=2.6,<3",
+    "sqlalchemy>=2,<3",
+    "structlog>=24.4,<26",
+    "uvicorn[standard]>=0.34,<1",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28,<1",
+    "pytest>=8.3,<9",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra"
