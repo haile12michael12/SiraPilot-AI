@@ -2,17 +2,14 @@ from collections.abc import Generator
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token, is_valid_csrf_token
 from app.models import RefreshSession, User
 
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/auth/login",
-    auto_error=False,
-)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_db(request: Request) -> Generator[Session, None, None]:
@@ -34,7 +31,7 @@ def require_csrf(request: Request) -> None:
 
 def get_current_user(
     request: Request,
-    token: str | None = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: Session = Depends(get_db),
 ) -> User:
     unauthorized = HTTPException(
@@ -42,10 +39,10 @@ def get_current_user(
         "Authentication required",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not token:
+    if credentials is None:
         raise unauthorized
     try:
-        claims = decode_access_token(token, request.app.state.settings)
+        claims = decode_access_token(credentials.credentials, request.app.state.settings)
         user_id = UUID(claims["sub"])
         session_id = UUID(claims["sid"])
         if claims["type"] != "access":
