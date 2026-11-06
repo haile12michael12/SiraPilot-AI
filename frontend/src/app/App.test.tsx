@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "@/app/App";
 
@@ -6,9 +7,10 @@ describe("application shell", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it("renders the dashboard and working workspace navigation", async () => {
+  it("renders the dashboard, service status, and theme control", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -19,6 +21,7 @@ describe("application shell", () => {
       ),
     );
 
+    const user = userEvent.setup();
     render(<App />);
 
     expect(
@@ -28,5 +31,10 @@ describe("application shell", () => {
       screen.getByRole("navigation", { name: "Main navigation" }),
     ).toHaveTextContent("Career profile");
     expect(await screen.findByText("All systems ready")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Switch to dark mode" }));
+    expect(
+      screen.getByRole("button", { name: "Switch to light mode" }),
+    ).toBeInTheDocument();
   });
 });
