@@ -1,12 +1,20 @@
-export function SkillsManager() {
-  return <ProfileSection title="Skills" description="Capture the strengths and tools you bring to your work." />;
-}
+import { ProfileCollectionManager } from "@/features/career-profile/components/ProfileCollectionManager";
 
-function ProfileSection({ title, description }: { title: string; description: string }) {
+export function SkillsManager() {
   return (
-    <section className="space-y-1 border-b border-border pb-6">
-      <h2 className="text-lg font-semibold">{title}</h2>
-      <p className="text-sm text-muted-foreground">{description}</p>
-    </section>
+    <ProfileCollectionManager
+      title="Skills"
+      collection="skills"
+      fields={[
+        { name: "name", label: "Skill", required: true },
+        {
+          name: "proficiency_level",
+          label: "Proficiency",
+          type: "select",
+          required: true,
+          options: ["beginner", "intermediate", "advanced", "expert"],
+        },
+      ]}
+    />
   );
 }

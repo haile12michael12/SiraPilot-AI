@@ -4,6 +4,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   LayoutDashboard,
+  LogOut,
   Menu,
   Moon,
   Sparkles,
@@ -14,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
+import { useAuth } from "@/features/auth/components/AuthProvider";
 
 const navigation = [
   { label: "Overview", to: "/", icon: LayoutDashboard, end: true },
@@ -102,6 +104,7 @@ function Sidebar({
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { user, logout } = useAuth();
   const theme = useUiStore((state) => state.theme);
   const toggleTheme = useUiStore((state) => state.toggleTheme);
   const pageTitle = pageTitles[location.pathname] ?? "Workspace";
@@ -149,9 +152,17 @@ export function AppLayout() {
             <span className="text-sm font-semibold">{pageTitle}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden text-xs text-muted-foreground sm:block">
-              Your next chapter, thoughtfully planned.
-            </span>
+            <span className="hidden max-w-48 truncate text-xs text-muted-foreground sm:block" title={user?.email}>{user?.email}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void logout()}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={16} aria-hidden="true" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
             <Button
               variant="ghost"
               size="icon"

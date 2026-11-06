@@ -1,8 +1,18 @@
+import { ProfileCollectionManager } from "@/features/career-profile/components/ProfileCollectionManager";
+
 export function ProjectManager() {
   return (
-    <section className="space-y-1 border-b border-border pb-6">
-      <h2 className="text-lg font-semibold">Projects</h2>
-      <p className="text-sm text-muted-foreground">Showcase work that demonstrates your impact.</p>
-    </section>
+    <ProfileCollectionManager
+      title="Projects"
+      collection="projects"
+      fields={[
+        { name: "name", label: "Project name", required: true },
+        { name: "role", label: "Your role" },
+        { name: "project_url", label: "Project URL", type: "url" },
+        { name: "start_date", label: "Start date", type: "date" },
+        { name: "end_date", label: "End date", type: "date" },
+        { name: "description", label: "Description", type: "textarea" },
+      ]}
+    />
   );
 }

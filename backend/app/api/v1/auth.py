@@ -53,7 +53,7 @@ def _set_csrf_cookie(response: Response, request: Request) -> None:
         httponly=False,
         secure=settings.cookie_secure,
         samesite="strict",
-        path="/api/v1",
+        path="/",
     )
 
 
@@ -81,7 +81,7 @@ def _clear_auth_cookies(response: Response, request: Request) -> None:
     )
     response.delete_cookie(
         "csrf_token",
-        path="/api/v1",
+        path="/",
         secure=settings.cookie_secure,
         samesite="strict",
     )

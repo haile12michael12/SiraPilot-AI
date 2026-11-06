@@ -1,6 +1,8 @@
 import { CertificationManager } from "@/features/career-profile/components/CertificationManager";
+import { CvUploadReview } from "@/features/career-profile/components/CvUploadReview";
 import { EducationManager } from "@/features/career-profile/components/EducationManager";
 import { ExperienceManager } from "@/features/career-profile/components/ExperienceManager";
+import { LinksManager } from "@/features/career-profile/components/LinksManager";
 import { PersonalInfoForm } from "@/features/career-profile/components/PersonalInfoForm";
 import { ProjectManager } from "@/features/career-profile/components/ProjectManager";
 import { SkillsManager } from "@/features/career-profile/components/SkillsManager";
@@ -22,6 +24,8 @@ export function CareerProfilePage() {
         <EducationManager />
         <ProjectManager />
         <CertificationManager />
+        <LinksManager />
+        <CvUploadReview />
       </div>
     </div>
   );

@@ -1,8 +1,18 @@
+import { ProfileCollectionManager } from "@/features/career-profile/components/ProfileCollectionManager";
+
 export function ExperienceManager() {
   return (
-    <section className="space-y-1 border-b border-border pb-6">
-      <h2 className="text-lg font-semibold">Experience</h2>
-      <p className="text-sm text-muted-foreground">Add roles that have shaped your career.</p>
-    </section>
+    <ProfileCollectionManager
+      title="Experience"
+      collection="experience"
+      fields={[
+        { name: "title", label: "Job title", required: true },
+        { name: "company", label: "Company", required: true },
+        { name: "location", label: "Location" },
+        { name: "start_date", label: "Start date", type: "date" },
+        { name: "end_date", label: "End date", type: "date" },
+        { name: "description", label: "Description", type: "textarea" },
+      ]}
+    />
   );
 }

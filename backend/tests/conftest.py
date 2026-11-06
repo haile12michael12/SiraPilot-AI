@@ -6,6 +6,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
 
+from app.core.database import Base
+import app.models
+
 os.environ.setdefault(
     "DATABASE_URL",
     "postgresql+psycopg://test:test@localhost:5432/sirapilot_test",
@@ -30,6 +33,7 @@ def test_engine() -> Engine:
 
 @pytest.fixture
 def client(test_engine: Engine) -> TestClient:
+    Base.metadata.create_all(test_engine)
     application = create_app(engine=test_engine)
     with TestClient(application) as test_client:
         yield test_client
