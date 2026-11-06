@@ -5,7 +5,8 @@ from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy.engine import ArgumentError, make_url
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 
 class Settings(BaseSettings):
@@ -29,6 +30,22 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:5173"]
     )
     log_level: str = "INFO"
+    auth_access_token_minutes: int = 15
+    auth_refresh_token_days: int = 30
+    auth_email_verification_hours: int = 24
+    auth_password_reset_minutes: int = 60
+    auth_rate_limit: int = 10
+    auth_rate_limit_window_seconds: int = 60
+    cookie_secure: bool = False
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    frontend_url: str = "http://localhost:5173"
+    max_cv_upload_bytes: int = 10 * 1024 * 1024
+    private_storage_path: Path = Path("./private_uploads")
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_email: str = "noreply@sirapilot.local"
 
     @field_validator("database_url")
     @classmethod
@@ -76,6 +93,27 @@ class Settings(BaseSettings):
             and self.secret_key.get_secret_value().startswith("local-development-")
         ):
             raise ValueError("A production SECRET_KEY must not use a local value")
+        if self.app_env == "production" and not self.cookie_secure:
+            raise ValueError("COOKIE_SECURE must be enabled in production")
+        if self.app_env == "production" and not self.smtp_host:
+            raise ValueError("SMTP_HOST must be configured in production")
+        if self.cookie_samesite == "none" and not self.cookie_secure:
+            raise ValueError("COOKIE_SECURE is required for SameSite=None cookies")
+        return self
+
+    @model_validator(mode="after")
+    def validate_positive_limits(self) -> "Settings":
+        limits = (
+            self.auth_access_token_minutes,
+            self.auth_refresh_token_days,
+            self.auth_email_verification_hours,
+            self.auth_password_reset_minutes,
+            self.auth_rate_limit,
+            self.auth_rate_limit_window_seconds,
+            self.max_cv_upload_bytes,
+        )
+        if any(value <= 0 for value in limits):
+            raise ValueError("Authentication and upload limits must be positive")
         return self
 
 

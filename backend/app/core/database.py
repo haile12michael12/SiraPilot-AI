@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Annotated
 
 from sqlalchemy import DateTime, MetaData, Uuid, create_engine, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.engine import Engine
 
 NAMING_CONVENTION = {
@@ -45,3 +45,7 @@ class UtcTimestampMixin:
 
 def create_db_engine(database_url: str) -> Engine:
     return create_engine(database_url, pool_pre_ping=True)
+
+
+def create_session_factory(engine: Engine) -> sessionmaker:
+    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
