@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/app/layouts/app-layout";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
-import { PlaceholderPage } from "@/features/shared/placeholder-page";
+import { PlaceholderPage } from "@/shared/components/placeholder-page";
 import { ProtectedRoute } from "@/features/auth/components/ProtectedRoute";
 import { LoginPage } from "@/features/auth/pages/LoginPage";
 import { RegisterPage } from "@/features/auth/pages/RegisterPage";

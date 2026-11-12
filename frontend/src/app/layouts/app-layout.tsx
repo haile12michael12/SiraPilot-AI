@@ -12,9 +12,9 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useUiStore } from "@/stores/ui-store";
+import { Button } from "@/shared/ui/button";
+import { cn } from "@/shared/lib/utils";
+import { useUiStore } from "@/app/stores/ui-store";
 import { useAuth } from "@/features/auth/components/AuthProvider";
 
 const navigation = [

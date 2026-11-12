@@ -1,6 +1,6 @@
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 
 export function PlaceholderPage({ title }: { title: string }) {
   return (

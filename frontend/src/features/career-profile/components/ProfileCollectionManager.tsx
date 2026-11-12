@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import { apiRequest } from "@/features/auth/services/auth-api";
 
 export type ProfileField = {

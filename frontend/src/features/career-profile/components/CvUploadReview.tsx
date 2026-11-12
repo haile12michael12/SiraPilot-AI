@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FileUp, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import { apiRequest } from "@/features/auth/services/auth-api";
 
 type Proposal = {

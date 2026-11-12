@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import { AuthPageShell } from "@/features/auth/components/AuthPageShell";
 import { authApi } from "@/features/auth/services/auth-api";
 

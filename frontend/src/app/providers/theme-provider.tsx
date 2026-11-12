@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { useUiStore } from "@/stores/ui-store";
+import { useUiStore } from "@/app/stores/ui-store";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const theme = useUiStore((state) => state.theme);

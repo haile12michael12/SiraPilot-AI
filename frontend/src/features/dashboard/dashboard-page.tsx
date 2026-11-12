@@ -11,9 +11,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { fetchHealth } from "@/lib/api";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent } from "@/shared/ui/card";
+import { fetchHealth } from "@/features/dashboard/services/health-api";
 
 const summary = [
   {
