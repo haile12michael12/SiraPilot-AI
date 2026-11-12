@@ -1,0 +1,13 @@
+﻿# End-to-End Testing
+
+This document is a placeholder for the end-to-end testing section in the project documentation.
+
+## Purpose
+
+End-to-end test workflow, fixtures, and validation patterns.
+
+## Notes
+
+- Add architecture details, decisions, examples, and operational guidance here.
+- Keep this file aligned with the current system implementation and product scope.
+- Update this document as the feature or subsystem evolves.

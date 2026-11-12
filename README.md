@@ -77,6 +77,7 @@ The project documentation is organized to separate architecture, product workflo
 
 ```text
 docs/
+│
 ├── architecture/
 │   ├── SYSTEM_ARCHITECTURE.md
 │   ├── BACKEND_ARCHITECTURE.md
@@ -86,47 +87,51 @@ docs/
 │   └── ADR/
 │
 ├── database/
-│   ├── ERD.md
-│   ├── SCHEMA.md
-│   ├── MIGRATIONS.md
-│   └── DATA_LIFECYCLE.md
+│   ├── DATABASE_SCHEMA.md
+│   ├── ER_DIAGRAM.md
+│   ├── MIGRATION_STRATEGY.md
+│   └── SYNC_ARCHITECTURE.md
+│
+├── features/
+│   ├── JOB_INTELLIGENCE.md
+│   ├── RESUME_STUDIO.md
+│   ├── CAREER_COPILOT.md
+│   ├── INTERVIEW_SIMULATOR.md
+│   ├── SKILLS_ANALYZER.md
+│   ├── JOB_DISCOVERY.md
+│   ├── AUTOMATION_BUILDER.md
+│   └── ANALYTICS.md
+│
+├── ai/
+│   ├── PROVIDERS.md
+│   ├── AGENTS.md
+│   ├── PROMPTS.md
+│   ├── EVALUATION.md
+│   └── AI_SECURITY.md
 │
 ├── api/
 │   ├── API_CONVENTIONS.md
 │   ├── ENDPOINTS.md
 │   └── ERROR_HANDLING.md
 │
-├── ai/
-│   ├── AI_FEATURES.md
-│   ├── AGENT_DESIGN.md
-│   ├── PROMPT_ENGINEERING.md
-│   ├── EVALUATION.md
-│   └── PRIVACY.md
-│
-├── integrations/
-│   ├── BROWSER_ADAPTERS.md
-│   ├── GMAIL_INTEGRATION.md
-│   └── PROVIDER_INTEGRATION.md
-│
 ├── security/
 │   ├── SECURITY_POLICY.md
 │   ├── THREAT_MODEL.md
-│   └── DATA_PROTECTION.md
+│   └── PRIVACY_POLICY.md
 │
 ├── testing/
 │   ├── TEST_STRATEGY.md
-│   ├── UNIT_TESTING.md
 │   └── E2E_TESTING.md
 │
 ├── deployment/
 │   ├── DOCKER.md
-│   ├── BACKUP_RESTORE.md
-│   └── RELEASE_PROCESS.md
+│   ├── CI_CD.md
+│   └── BACKUP_RESTORE.md
 │
 └── development/
     ├── CODING_STANDARDS.md
-    ├── CONTRIBUTION_GUIDE.md
-    └── IMPLEMENTATION_ROADMAP.md
+    ├── CONTRIBUTING.md
+    └── ROADMAP.md
 ```
 
 ## Development and documentation
