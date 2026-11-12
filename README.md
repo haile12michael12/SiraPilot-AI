@@ -1,85 +1,150 @@
 # SiraPilot AI
 
-**Track the opportunity, not the website where you found it.**
+SiraPilot AI is a self-hosted job search workspace designed to help you track opportunities with clarity, control, and context.
 
-A job search rarely stays in one place. The same opportunity can appear in a search, return under a new URL, arrive by email, and become an application whose history is scattered across bookmarks, notes, and inbox messages. Spreadsheets and generic project boards can store those fragments, but leave you to connect them.
+Instead of managing applications across bookmarks, inboxes, notes, and spreadsheets, you keep one structured record per opportunity. The platform captures listing details, tracks status changes, preserves decision history, and keeps everything connected to the job you are pursuing.
 
-SiraPilot AI is a self-hosted workspace built around one lasting record per job. Listings, status changes, notes, decisions, and materials stay attached to that opportunity. A browser extension captures details and reliable lifecycle updates, while a local Kanban dashboard keeps the process visible and under your control.
+## Why it exists
 
-SiraPilot AI gives AI agents structured context about your opportunities, application history, notes, and materials to support job-search decisions and application preparation. Agents can discover the API through the running server's OpenAPI schema at `/openapi.json`.
+Job searching often involves fragmented information:
 
-![Job Tracker overview](docs/images/social-preview.png)
+- listing URLs appear in multiple places
+- opportunities get reposted or re-opened
+- statuses change over time
+- notes and decision context are scattered across tools
+- application materials are hard to keep organized
 
-## Features
+SiraPilot AI consolidates that workflow into one local-first system built around a single source of truth per job.
 
-- **One opportunity, one history.** Keep multiple listing URLs, status changes, notes, events, decisions, and materials connected to the same job.
-- **Capture what can be captured.** Record supported listing details and lifecycle updates while you browse instead of retyping them later.
-- **Reuse answers without giving up control.** Fill supported LinkedIn Easy Apply questions from exact, reviewed Matches; preserve existing values and keep unsupported controls, navigation, and submission manual.
-- **Catch reposts without losing control.** Review suggested matches, confirm genuine reposts, and preserve the history already gathered; merging is never automatic.
-- **Decide with context.** Surface experience requirements, languages, pay, seniority, applicant activity, listing age, custom terms, and company history with the evidence around each signal.
-- **Act where you encounter the job.** Use in-page controls or the context-seeded popup to search, update status, backdate events, comment, add notes, or create a job manually.
-- **Follow through.** Use a correctable timeline, attention rules, material records, custom fields, and a Kanban dashboard to keep applications moving.
-- **Stay local and extensible.** Use SQLite by default, opt into Turso synchronization, and add new built-in or private integrations through the adapter model.
+## Core capabilities
 
-[Explore all features and workflows](docs/FEATURES.md), including automation boundaries, repost handling, decision signals, and follow-up tools.
+- One opportunity, one history: keep listings, notes, status updates, materials, and decisions attached to the same record.
+- Smart capture: record supported job details directly from the browser instead of retyping them later.
+- Reuse with control: review remembered answers and supported application data before reusing them.
+- Repost detection: identify probable reposts while preserving existing history rather than merging blindly.
+- Decision support: surface relevant signals such as seniority, pay, requirements, listing age, and company context.
+- Kanban visibility: keep every opportunity visible in a local dashboard and move it through the process with confidence.
+- Local-first architecture: default to a local SQLite database, with optional synchronization support and extensible integrations.
 
-## What's built in today
+## How it works
 
-| Surface | Support |
-| --- | --- |
-| LinkedIn jobs | Listing capture and in-page triage on search cards and job details; user-controlled filling for supported Easy Apply questions |
-| LinkedIn job emails in Gmail | Recognizes supported messages and adds tracker actions |
-| Sites without a built-in integration | Add a job manually from the popup |
+SiraPilot AI combines a browser extension, a local server, and a dashboard:
 
-LinkedIn and supported LinkedIn job emails in Gmail are the only built-in integrations today. The integration layer is designed to support additional built-in or private/local adapters without changing the core job model.
-
-These unofficial integrations depend on third-party page layouts, may require adapter updates when those layouts change, and remain subject to each platform’s terms.
+- Browser extension: capture job data, review decision signals, and update tracked opportunities while browsing.
+- API server: store and expose structured job records and workflow state through a local service.
+- Dashboard: visualize opportunities, stages, notes, and follow-up actions in a Kanban-style interface.
+- AI-ready context: agents can use the app's structured data and OpenAPI schema for job-search assistance and operational workflows.
 
 ## See it in action
 
-Watch the 2½-minute narrated demo: follow a job from Gmail to LinkedIn, review reposts and remembered Easy Apply answers, use the extension on an employer’s website, and bring the connected history into an AI prompt.
+Watch the demo that follows a job from Gmail to LinkedIn and shows how SiraPilot AI helps maintain context through the hiring process.
 
 https://github.com/user-attachments/assets/9a478d3d-425c-4217-aa50-1cb8c1550dc4
 
-[Download the MP4](https://github.com/haile12michael12/SiraPilot-AI/raw/refs/heads/main/docs/videos/job-tracker-demo.mp4).
+[Download the demo MP4](https://github.com/haile12michael12/SiraPilot-AI/raw/refs/heads/main/docs/videos/job-tracker-demo.mp4)
 
-### Dashboard
+## Supported integrations
 
-Keep every opportunity and its current stage visible from the local Kanban dashboard.
+| Surface | Support |
+| --- | --- |
+| LinkedIn jobs | Capture listing details and support in-page triage on search cards and job detail views |
+| LinkedIn job emails in Gmail | Recognize supported messages and add tracker actions |
+| Other sites | Add jobs manually from the extension and dashboard |
 
-![Job Tracker dashboard](docs/images/dashboard.png)
+LinkedIn and supported LinkedIn job emails in Gmail are the primary built-in integrations today. The integration layer is designed to support additional built-in and private adapters without altering the core job model.
 
-### Browser extension
+## Privacy and security
 
-Capture job details, review decision signals, and update tracked opportunities without leaving the listing.
+SiraPilot AI is designed for single-user, self-hosted local use. By default, records remain in a local SQLite database on your machine. Optional Turso synchronization is available for those who want extra flexibility, but the system keeps the core workflow local-first.
 
-![Job Tracker browser extension](docs/images/extension.png)
-
-## Data and privacy
-
-Job Tracker is a single-user, self-hosted application designed for localhost use. By default, records—including verified form Answers and remembered values awaiting review—stay in a local SQLite file on your own machine; Turso synchronization is optional. Database backups and optional Turso synchronization include those retained private values. The extension talks only to the configured Job Tracker server, uses no third-party analytics, and keeps optional search diagnostics off by default.
-
-On Gmail, the extension recognizes supported LinkedIn job messages in the browser and sends only the structured job and action data needed by the tracker; it does not send or store the email body as a job description. See [Privacy](PRIVACY.md) for captured fields, permissions, retention, and deletion, and [Security](SECURITY.md) for the supported localhost threat model.
+The browser extension communicates only with the configured local server and does not rely on third-party analytics. For details on data capture, retention, and permissions, see [Privacy](PRIVACY.md). For the supported local threat model, see [Security](SECURITY.md).
 
 ## Installation
 
-Run from [source](docs/DEPLOYMENT.md#install-from-source), use [Docker Compose](docs/DEPLOYMENT.md#run-with-docker-compose), or download a [Linux/WSL2 release](docs/DEPLOYMENT.md#install-a-linux-x86_64-release). Open <http://localhost:3456> and [load the matching extension](docs/DEPLOYMENT.md#load-the-extension).
+For setup and launch instructions, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-[Deployment](docs/DEPLOYMENT.md) covers requirements, setup, updates, backups, and optional [srvr home-server management](docs/DEPLOYMENT.md#optional-manage-a-home-server-with-srvr).
+Typical options include:
+
+- install from source
+- run with Docker Compose
+- use a packaged Linux/WSL2 release
+
+After setup, open <http://localhost:3456> and load the matching browser extension.
+
+## Documentation map
+
+The project documentation is organized to separate architecture, product workflows, integrations, and operational guidance.
+
+```text
+docs/
+├── architecture/
+│   ├── SYSTEM_ARCHITECTURE.md
+│   ├── BACKEND_ARCHITECTURE.md
+│   ├── FRONTEND_ARCHITECTURE.md
+│   ├── EXTENSION_ARCHITECTURE.md
+│   ├── AI_ARCHITECTURE.md
+│   └── ADR/
+│
+├── database/
+│   ├── ERD.md
+│   ├── SCHEMA.md
+│   ├── MIGRATIONS.md
+│   └── DATA_LIFECYCLE.md
+│
+├── api/
+│   ├── API_CONVENTIONS.md
+│   ├── ENDPOINTS.md
+│   └── ERROR_HANDLING.md
+│
+├── ai/
+│   ├── AI_FEATURES.md
+│   ├── AGENT_DESIGN.md
+│   ├── PROMPT_ENGINEERING.md
+│   ├── EVALUATION.md
+│   └── PRIVACY.md
+│
+├── integrations/
+│   ├── BROWSER_ADAPTERS.md
+│   ├── GMAIL_INTEGRATION.md
+│   └── PROVIDER_INTEGRATION.md
+│
+├── security/
+│   ├── SECURITY_POLICY.md
+│   ├── THREAT_MODEL.md
+│   └── DATA_PROTECTION.md
+│
+├── testing/
+│   ├── TEST_STRATEGY.md
+│   ├── UNIT_TESTING.md
+│   └── E2E_TESTING.md
+│
+├── deployment/
+│   ├── DOCKER.md
+│   ├── BACKUP_RESTORE.md
+│   └── RELEASE_PROCESS.md
+│
+└── development/
+    ├── CODING_STANDARDS.md
+    ├── CONTRIBUTION_GUIDE.md
+    └── IMPLEMENTATION_ROADMAP.md
+```
+
+## Development and documentation
+
+- Architecture and component boundaries: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Deployment and environment setup: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Feature workflows and capabilities: [docs/FEATURES.md](docs/FEATURES.md)
+- API and backend: [apps/api/README.md](apps/api/README.md)
+- Dashboard app: [apps/web/README.md](apps/web/README.md)
+- Browser extension: [apps/extension/README.md](apps/extension/README.md)
+- Developer policy and quality gates: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- Contribution workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Release history: [CHANGELOG.md](CHANGELOG.md)
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ## Maintainer
 
-This project is maintained by [Hailemichael Assefa](https://github.com/haile12michael12), a full-stack software developer focused on scalable web platforms, secure APIs, and AI-powered products. Find more about his work on his [portfolio](https://hailemichael-portfolio.vercel.app/) and [LinkedIn](https://www.linkedin.com/in/hailemichael-assefa-413614223/).
-
-## Project documentation
-
-- Architecture and component boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- API, configuration, database modes, and maintenance: [`apps/api/README.md`](apps/api/README.md)
-- Dashboard development: [`apps/web/README.md`](apps/web/README.md)
-- Extension build, keyboard controls, and adapter guide: [`apps/extension/README.md`](apps/extension/README.md)
-- Private/local adapter overlay: [`docs/PRIVATE.md`](docs/PRIVATE.md)
-- Developer policy — quality gate, generated files, comment and Markdown style, migrations, and versioning: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
-- Contributions and support: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Release history: [`CHANGELOG.md`](CHANGELOG.md)
-
-Licensed under the [MIT License](LICENSE).
+SiraPilot AI is maintained by [Hailemichael Assefa](https://github.com/haile12michael12), with a focus on secure APIs, scalable product systems, and practical AI-assisted workflows.
