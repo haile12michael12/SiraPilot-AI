@@ -67,6 +67,10 @@ Run from [source](docs/DEPLOYMENT.md#install-from-source), use [Docker Compose](
 
 [Deployment](docs/DEPLOYMENT.md) covers requirements, setup, updates, backups, and optional [srvr home-server management](docs/DEPLOYMENT.md#optional-manage-a-home-server-with-srvr).
 
+## Maintainer
+
+This project is maintained by [Hailemichael Assefa](https://github.com/haile12michael12), a full-stack software developer focused on scalable web platforms, secure APIs, and AI-powered products. Find more about his work on his [portfolio](https://hailemichael-portfolio.vercel.app/) and [LinkedIn](https://www.linkedin.com/in/hailemichael-assefa-413614223/).
+
 ## Project documentation
 
 - Architecture and component boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
