@@ -57,7 +57,7 @@ it.each(["jobs", "form-fill"])(
     window.history.replaceState(null, "", `/?view=${view}`);
     render(<App />);
     expect(screen.queryByText("About")).toBeNull();
-    expect(screen.queryByRole("dialog", { name: "About Job Tracker" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "About SiraPilot AI" })).toBeNull();
     expect(
       within(screen.getByRole("navigation", { name: "Primary workspace" })).queryByText("About"),
     ).toBeNull();
@@ -66,7 +66,7 @@ it.each(["jobs", "form-fill"])(
     fireEvent.click(burger);
     fireEvent.click(screen.getByRole("menuitem", { name: "About" }));
     expect(screen.queryByRole("menu")).toBeNull();
-    expect(screen.getByRole("dialog", { name: "About Job Tracker" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "About SiraPilot AI" })).toBeTruthy();
     await waitFor(() => expect(screen.getByRole("status").textContent).not.toContain("Checking"));
     fireEvent.keyDown(window, { key: "?" });
     fireEvent.keyDown(window, { key: "n" });

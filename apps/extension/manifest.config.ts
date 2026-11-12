@@ -21,7 +21,7 @@ const contentMatches = [
 
 export default defineManifest({
   manifest_version: 3,
-  name: "Job Tracker",
+  name: "SiraPilot AI",
   version: VERSION,
   icons: {
     16: "icons/icon16.png",
@@ -31,7 +31,7 @@ export default defineManifest({
   },
   // Pinned public key → stable extension id across reloads (dev + unpacked installs).
   key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1Zt3fnQzOGTIsooPzMqofGIEWiq5l5XuAh1huw27MMmm/pyix4iZQV9KdQ9MlhNOwb5pxMpmT7fGmkAoZpKJBpc0ORdxoEL/TUEoH7zSCRoPLoaSdvBjMwxbrH0CMAcg8fGKQUryMKCupj0FB4ojW7wx2YXsGEqLU2R/uKZt+gOvl9umzPEbttDGJbKHlmrQvU8fSSv6355oV6mzjobJTFdHvFlLe0ewDWO9RuiZdKlLmbzQG9fnusuzmLTZBB11HRh+LeSZEvfBxgfob+ZgeDa+BM9gJ6yrppmT5YleZXBRMJWD9K9Mo8WY5EWNljBMVLo2/MTD0e6W24UaziDVrQIDAQAB", // gitleaks:allow (public key, not a secret)
-  description: "Capture and triage job listings from the sites you browse — into your Job Tracker.",
+  description: "Capture and triage job listings from the sites you browse — into your SiraPilot AI workspace.",
   // Navigation permissions support SPA reinjection; alarms drive health checks.
   permissions: ["storage", "activeTab", "scripting", "webNavigation", "alarms"],
   host_permissions: [API_ORIGIN, ...contentMatches],
@@ -41,7 +41,7 @@ export default defineManifest({
   commands: {
     _execute_action: {
       suggested_key: { default: "Alt+J" },
-      description: "Open Job Tracker",
+      description: "Open SiraPilot AI",
     },
   },
   background: { service_worker: "src/background.ts" },

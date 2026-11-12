@@ -159,13 +159,13 @@ def inspect_server(paths: ResolvedPaths, *, timeout: float = 0.4) -> ServerStatu
     try:
         metadata = json.loads(paths.lock_file.read_text())
         port = int(metadata["port"])
-    except OSError, ValueError, TypeError, KeyError, json.JSONDecodeError:
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
         return ServerStatus("lock-held-but-unhealthy", "lock metadata is unreadable")
     try:
         with urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout) as response:  # noqa: S310
             if response.status == 200:
                 return ServerStatus("healthy", f"server is healthy on 127.0.0.1:{port}")
-    except HTTPError, URLError, TimeoutError, OSError:
+    except (HTTPError, URLError, TimeoutError, OSError):
         pass
     return ServerStatus(
         "lock-held-but-unhealthy", f"lock is held but health failed on 127.0.0.1:{port}"

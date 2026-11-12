@@ -215,10 +215,10 @@ Initial public release.
 - Verified per-connection foreign-key enforcement, an orphan pre-flight where supported by the database driver, atomic migrations, and collision-safe listing identifiers.
 - Localhost threat model with a CORS allowlist, a DNS-rebinding guard, and an optional API key; see [`SECURITY.md`](SECURITY.md).
 
-[1.2.0]: https://github.com/Muatasim-Aswad/job-tracker/compare/v1.1.0...v1.2.0
-[1.1.0]: https://github.com/Muatasim-Aswad/job-tracker/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/Muatasim-Aswad/job-tracker/releases/tag/v1.0.0
-[1.2.1]: https://github.com/Muatasim-Aswad/job-tracker/compare/v1.2.0...v1.2.1
-[1.3.0]: https://github.com/Muatasim-Aswad/job-tracker/compare/v1.2.1...v1.3.0
-[1.4.0]: https://github.com/Muatasim-Aswad/job-tracker/compare/v1.3.0...v1.4.0
-[1.4.1]: https://github.com/Muatasim-Aswad/job-tracker/compare/v1.4.0...v1.4.1
+[1.2.0]: https://github.com/haile12michael12/SiraPilot-AI/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/haile12michael12/SiraPilot-AI/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/haile12michael12/SiraPilot-AI/releases/tag/v1.0.0
+[1.2.1]: https://github.com/haile12michael12/SiraPilot-AI/compare/v1.2.0...v1.2.1
+[1.3.0]: https://github.com/haile12michael12/SiraPilot-AI/compare/v1.2.1...v1.3.0
+[1.4.0]: https://github.com/haile12michael12/SiraPilot-AI/compare/v1.3.0...v1.4.0
+[1.4.1]: https://github.com/haile12michael12/SiraPilot-AI/compare/v1.4.0...v1.4.1

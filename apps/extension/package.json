@@ -1,12 +1,12 @@
 {
   "name": "job-tracker-extension",
   "private": true,
-  "description": "Job Tracker browser extension — captures listings and drives the funnel from the sites you browse.",
-  "homepage": "https://github.com/Muatasim-Aswad/job-tracker#readme",
+  "description": "SiraPilot AI browser extension — captures listings and drives the funnel from the sites you browse.",
+  "homepage": "https://github.com/haile12michael12/SiraPilot-AI#readme",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Muatasim-Aswad/job-tracker.git",
+    "url": "git+https://github.com/haile12michael12/SiraPilot-AI.git",
     "directory": "apps/extension"
   },
   "type": "module",

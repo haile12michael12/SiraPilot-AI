@@ -16,19 +16,19 @@ Requires Docker with Compose. Download the release's Compose file and start the 
 
 ```bash
 mkdir -p job-tracker && cd job-tracker
-curl -fsSLO https://raw.githubusercontent.com/Muatasim-Aswad/job-tracker/v2.0.0/compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/haile12michael12/SiraPilot-AI/v2.0.0/compose.yaml
 docker compose up -d --no-build
 ```
 
-Open <http://localhost:3456>. Download `job-tracker-extension-2.0.0.zip` from the [matching release](https://github.com/Muatasim-Aswad/job-tracker/releases/tag/v2.0.0) and follow [Load the extension](#load-the-extension). Linux/amd64 only; no registry login is required. Compose binds to loopback and creates persistent named volumes. [Containers](CONTAINERS.md) covers configuration, backup, upgrades and removal.
+Open <http://localhost:3456>. Download `job-tracker-extension-2.0.0.zip` from the [matching release](https://github.com/haile12michael12/SiraPilot-AI/releases/tag/v2.0.0) and follow [Load the extension](#load-the-extension). Linux/amd64 only; no registry login is required. Compose binds to loopback and creates persistent named volumes. [Containers](CONTAINERS.md) covers configuration, backup, upgrades and removal.
 
 ### Build the Docker image from source
 
 Requires Git and Docker with Compose; Docker installs all build tools internally:
 
 ```bash
-git clone https://github.com/Muatasim-Aswad/job-tracker.git
-cd job-tracker
+git clone https://github.com/haile12michael12/SiraPilot-AI.git
+cd SiraPilot-AI
 export JOB_TRACKER_IMAGE=job-tracker:local
 docker compose build
 docker compose up -d --no-build --pull never
@@ -39,8 +39,8 @@ docker compose up -d --no-build --pull never
 ## Install from source
 
 ```bash
-git clone https://github.com/Muatasim-Aswad/job-tracker.git
-cd job-tracker
+git clone https://github.com/haile12michael12/SiraPilot-AI.git
+cd SiraPilot-AI
 mise trust
 mise install
 mise run setup
@@ -51,7 +51,7 @@ mise pins Node, Python, pnpm, and uv from [`mise.toml`](../mise.toml) and its ge
 
 ## Install a Linux x86_64 release
 
-Download the runtime archive, extension ZIP, wheel, and `SHA256SUMS` from the [latest release](https://github.com/Muatasim-Aswad/job-tracker/releases/latest) into a single directory, then verify them:
+Download the runtime archive, extension ZIP, wheel, and `SHA256SUMS` from the [latest release](https://github.com/haile12michael12/SiraPilot-AI/releases/latest) into a single directory, then verify them:
 
 ```bash
 sha256sum -c SHA256SUMS

@@ -29,7 +29,7 @@ def _cursor_payload(cursor: str) -> dict[str, object]:
             raise ValueError
 
         return cast(dict[str, object], payload)
-    except TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError:
+    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
         raise InvalidCursorError from None
 
 
@@ -55,7 +55,7 @@ def _decode_cursor(
             raise ValueError
 
         return (value, resource_id)
-    except KeyError, TypeError, ValueError:
+    except (KeyError, TypeError, ValueError):
         raise InvalidCursorError from None
 
 
@@ -70,5 +70,5 @@ def _decode_time_cursor(cursor: str, fingerprint: str, sort: str) -> tuple[str, 
             raise ValueError
 
         return (value, resource_id)
-    except KeyError, TypeError, ValueError:
+    except (KeyError, TypeError, ValueError):
         raise InvalidCursorError from None

@@ -22,5 +22,5 @@ def report_database_stall(stage: str) -> None:
         # No request bodies, SQL, tokens, or frame locals are included.
         try:
             faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
-        except OSError, ValueError, RuntimeError:
+        except (OSError, ValueError, RuntimeError):
             logger.warning("thread dump unavailable", exc_info=True)

@@ -105,7 +105,7 @@
     </text>
 
     <rect x="72" y="460" width="110" height="3" rx="1.5" fill="#7c3aed"/>
-    <text x="72" y="502" fill="#475569" font-family="JetBrainsMono NF, Adwaita Mono, monospace" font-size="15.5">github.com/Muatasim-Aswad/job-tracker</text>
+    <text x="72" y="502" fill="#475569" font-family="JetBrainsMono NF, Adwaita Mono, monospace" font-size="15.5">github.com/haile12michael12/SiraPilot-AI</text>
     <text x="72" y="532" fill="#94a3b8" font-size="13">FastAPI · React · Chromium extension · SQLite/Turso</text>
   </g>
 </svg>

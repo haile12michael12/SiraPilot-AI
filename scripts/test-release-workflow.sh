@@ -45,7 +45,7 @@ grep -Fq "UPDATE_LATEST: \${{ github.event_name == 'push' || inputs.update_lates
 grep -Fq 'TAGS+=(--tag "$IMAGE:latest")' "$CONTAINER_WORKFLOW" ||
   fail "container publication lacks the current-stable latest alias."
 VERSION="$(tr -d '[:space:]' <"$ROOT/VERSION")"
-COMPOSE_VERSION="$(sed -nE 's/^[[:space:]]*image: \$\{JOB_TRACKER_IMAGE:-ghcr\.io\/muatasim-aswad\/job-tracker:v([0-9]+\.[0-9]+\.[0-9]+)\}$/\1/p' "$COMPOSE")"
+COMPOSE_VERSION="$(sed -nE 's/^[[:space:]]*image: \$\{JOB_TRACKER_IMAGE:-ghcr\.io\/haile12michael12\/sirapilot-ai:v([0-9]+\.[0-9]+\.[0-9]+)\}$/\1/p' "$COMPOSE")"
 [[ -n "$COMPOSE_VERSION" ]] || fail "Compose must pin a canonical public image version."
 python3 - "$VERSION" "$COMPOSE_VERSION" <<'PYVERSIONS'
 import sys

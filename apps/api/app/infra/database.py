@@ -8,7 +8,10 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-import libsql
+try:
+    import libsql
+except ModuleNotFoundError:  # pragma: no cover
+    libsql = None  # type: ignore[assignment]
 
 from app.config import Settings
 from app.core.paths import resolve_paths, settings_paths

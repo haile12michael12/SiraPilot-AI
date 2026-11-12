@@ -32,7 +32,7 @@ def _lock_owner(fd: int) -> str:
         pid = metadata.get("pid")
         if isinstance(pid, int) and pid > 0:
             return f"PID {pid}"
-    except OSError, UnicodeError, json.JSONDecodeError, AttributeError:
+    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
         pass
     return "an unknown process"
 

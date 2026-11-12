@@ -20,7 +20,7 @@ def local_timezone() -> str:
     )
     try:
         ZoneInfo(value)
-    except ZoneInfoNotFoundError, ValueError:
+    except (ZoneInfoNotFoundError, ValueError):
         return "UTC"
     return value
 
@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     notification_scheduler_enabled: bool = True
     stale_notification_timezone: str = Field(default_factory=local_timezone)
     web_push_enabled: bool = True
-    web_push_subject: str = "https://github.com/Muatasim-Aswad/job-tracker"
+    web_push_subject: str = "https://github.com/haile12michael12/SiraPilot-AI"
 
     # --- security ----------------------------------------------------------
 

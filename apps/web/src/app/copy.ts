@@ -34,7 +34,7 @@ export const copy = {
     commitTime: "Commit time",
     buildTime: "Build time",
     buildState: "Build state",
-    aboutJobTracker: "About Job Tracker",
+    aboutJobTracker: "About SiraPilot AI",
     close: "Close",
     trackJobOpportunitiesApplicationHistoryAndReusableAnswersIn:
       "Track job opportunities, application history, and reusable answers in one place.",
@@ -47,7 +47,7 @@ export const copy = {
     saveUnsavedChangesBeforeReloading: "Save unsaved changes before reloading.",
   },
   app: {
-    jobTracker: "Job Tracker",
+    jobTracker: "SiraPilot AI",
     addAJobN: "Add a job (n)",
     loadingJobs: "Loading jobs…",
     apiUnavailable: (error: string) =>
@@ -63,7 +63,7 @@ export const copy = {
     primaryWorkspace: "Primary workspace",
     itemsNeedReview: "Items need review",
     chooseTheAnswersJobTrackerCanReuseInApplication:
-      "Choose the answers Job Tracker can reuse in application forms. Review new questions here; edit your saved answers anytime.",
+      "Choose the answers SiraPilot AI can reuse in application forms. Review new questions here; edit your saved answers anytime.",
   },
   headerMenu: {
     navigationAndSettings: "Navigation and settings",
@@ -122,6 +122,6 @@ export const copy = {
   },
   useBuildCheck: {
     aDifferentJobTrackerBuildIsAvailableOpenAbout: (version: string) =>
-      `A different Job Tracker build (${version}) is available. Open About in the menu to check and reload.`,
+      `A different SiraPilot AI build (${version}) is available. Open About in the menu to check and reload.`,
   },
 } as const;

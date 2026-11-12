@@ -44,9 +44,9 @@ export default defineConfig({
       },
       manifest: {
         id: "/",
-        name: "Job Tracker",
-        short_name: "Job Tracker",
-        description: "Track jobs and review reusable application answers.",
+        name: "SiraPilot AI",
+        short_name: "SiraPilot",
+        description: "Track jobs and review reusable application answers with SiraPilot AI.",
         start_url: "/",
         scope: "/",
         display: "standalone",

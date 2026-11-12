@@ -36,6 +36,6 @@ describe("extension/server build comparison", () => {
   it("gives connection failures priority and restores the mismatch after reconnecting", () => {
     expect(toolbarStatus(false, true)).toMatchObject({ text: "!", color: "#e53e3e" });
     expect(toolbarStatus(true, true)).toMatchObject({ text: "↑", color: "#b45309" });
-    expect(toolbarStatus(true, false)).toMatchObject({ text: "", title: "Job Tracker" });
+    expect(toolbarStatus(true, false)).toMatchObject({ text: "", title: "SiraPilot AI" });
   });
 });

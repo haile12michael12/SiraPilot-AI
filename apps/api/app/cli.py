@@ -48,6 +48,7 @@ def _parser() -> argparse.ArgumentParser:
         "migrate-checkout", help="adopt a legacy checkout into an empty packaged profile"
     )
     migrate.add_argument("checkout", type=Path)
+    commands.add_parser("seed-profile", help="seed default profile answers for Hailemichael Assefa")
     return parser
 
 
@@ -235,6 +236,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             adopted = migrate_checkout(settings, paths, args.checkout.resolve())
             print(f"checkout adopted: {adopted}")
             return 0
+
+        if args.command == "seed-profile":
+            from app.core.seed_profile import seed_hailemichael_profile
+            from app.infra.database import connect_db
+
+            conn = connect_db(settings, paths)
+            try:
+                res = seed_hailemichael_profile(conn)
+                print(f"profile seeded: {res['answers_created']} answers created (total {res['total_answers']})")
+                return 0
+            finally:
+                conn.close()
     except (OSError, RuntimeError) as exc:
         print(f"job-tracker: {exc}", file=sys.stderr)
         return 2

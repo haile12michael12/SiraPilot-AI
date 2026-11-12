@@ -5,10 +5,10 @@ export const copy = {
 
   version: {
     jobTrackerCanTReachTheServerChangesAren:
-      "Job Tracker — can't reach the server; changes aren't being saved",
+      "SiraPilot AI — can't reach the server; changes aren't being saved",
     jobTrackerExtensionAndServerVersionsDiffer:
-      "Job Tracker — extension and server versions differ",
-    jobTracker: "Job Tracker",
+      "SiraPilot AI — extension and server versions differ",
+    jobTracker: "SiraPilot AI",
   },
   config: {
     enterACompleteHttpOrHttpsServerAddress: "Enter a complete http:// or https:// server address.",
@@ -18,7 +18,7 @@ export const copy = {
       "Server access was not granted. Your current server is unchanged.",
     serverReturnedHTTP: (status: number) => `Server returned HTTP ${status}.`,
     thisAddressDidNotReturnAJobTrackerHealth:
-      "This address did not return a Job Tracker health response.",
+      "This address did not return a SiraPilot AI health response.",
   },
   background: {
     serverChangedRetryThisAction: "Server changed; retry this action.",

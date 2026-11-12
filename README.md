@@ -1,12 +1,12 @@
-# Job Tracker
+# SiraPilot AI
 
 **Track the opportunity, not the website where you found it.**
 
 A job search rarely stays in one place. The same opportunity can appear in a search, return under a new URL, arrive by email, and become an application whose history is scattered across bookmarks, notes, and inbox messages. Spreadsheets and generic project boards can store those fragments, but leave you to connect them.
 
-Job Tracker is a self-hosted workspace built around one lasting record per job. Listings, status changes, notes, decisions, and materials stay attached to that opportunity. A browser extension captures details and reliable lifecycle updates, while a local Kanban dashboard keeps the process visible and under your control.
+SiraPilot AI is a self-hosted workspace built around one lasting record per job. Listings, status changes, notes, decisions, and materials stay attached to that opportunity. A browser extension captures details and reliable lifecycle updates, while a local Kanban dashboard keeps the process visible and under your control.
 
-Job Tracker gives AI agents structured context about your opportunities, application history, notes, and materials to support job-search decisions and application preparation. Agents can discover the API through the running server's OpenAPI schema at `/openapi.json`.
+SiraPilot AI gives AI agents structured context about your opportunities, application history, notes, and materials to support job-search decisions and application preparation. Agents can discover the API through the running server's OpenAPI schema at `/openapi.json`.
 
 ![Job Tracker overview](docs/images/social-preview.png)
 
@@ -41,7 +41,7 @@ Watch the 2½-minute narrated demo: follow a job from Gmail to LinkedIn, review 
 
 https://github.com/user-attachments/assets/9a478d3d-425c-4217-aa50-1cb8c1550dc4
 
-[Download the MP4](https://github.com/Muatasim-Aswad/job-tracker/raw/refs/heads/main/docs/videos/job-tracker-demo.mp4).
+[Download the MP4](https://github.com/haile12michael12/SiraPilot-AI/raw/refs/heads/main/docs/videos/job-tracker-demo.mp4).
 
 ### Dashboard
 
@@ -66,6 +66,10 @@ On Gmail, the extension recognizes supported LinkedIn job messages in the browse
 Run from [source](docs/DEPLOYMENT.md#install-from-source), use [Docker Compose](docs/DEPLOYMENT.md#run-with-docker-compose), or download a [Linux/WSL2 release](docs/DEPLOYMENT.md#install-a-linux-x86_64-release). Open <http://localhost:3456> and [load the matching extension](docs/DEPLOYMENT.md#load-the-extension).
 
 [Deployment](docs/DEPLOYMENT.md) covers requirements, setup, updates, backups, and optional [srvr home-server management](docs/DEPLOYMENT.md#optional-manage-a-home-server-with-srvr).
+
+## Maintainer
+
+This project is maintained by [Hailemichael Assefa](https://github.com/haile12michael12), a full-stack software developer focused on scalable web platforms, secure APIs, and AI-powered products. Find more about his work on his [portfolio](https://hailemichael-portfolio.vercel.app/) and [LinkedIn](https://www.linkedin.com/in/hailemichael-assefa-413614223/).
 
 ## Project documentation
 

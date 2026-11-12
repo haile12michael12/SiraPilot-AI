@@ -2,11 +2,11 @@
   "name": "@job-tracker/shared",
   "version": "0.0.0",
   "private": true,
-  "homepage": "https://github.com/Muatasim-Aswad/job-tracker#readme",
+  "homepage": "https://github.com/haile12michael12/SiraPilot-AI#readme",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Muatasim-Aswad/job-tracker.git",
+    "url": "git+https://github.com/haile12michael12/SiraPilot-AI.git",
     "directory": "packages/shared"
   },
   "type": "module",

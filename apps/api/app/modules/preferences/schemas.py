@@ -58,16 +58,27 @@ class SearchDiagnostics(PreferenceModel):
 
 def default_highlights() -> list[DescriptionHighlight]:
     return [
-        DescriptionHighlight(id="experience-years", terms=["years", "year", "jaar"]),
-        DescriptionHighlight(id="language", terms=["dutch", "nederlandse"]),
-        DescriptionHighlight(id="pay", terms=["euro", "€"]),
+        DescriptionHighlight(id="experience-years", terms=["years", "year", "exp", "jaar"]),
+        DescriptionHighlight(id="language", terms=["english", "amharic", "dutch", "nederlandse"]),
+        DescriptionHighlight(id="pay", terms=["usd", "$", "euro", "€", "birr", "etb"]),
         DescriptionHighlight(
             id="custom-words",
             terms=[
                 "senior",
+                "lead",
+                "fullstack",
+                "full-stack",
+                "backend",
+                "frontend",
+                "python",
+                "fastapi",
+                "laravel",
+                "react",
+                "typescript",
+                "ai",
+                "remote",
                 "medior",
                 "junior",
-                "lead",
                 "principal",
                 "staff",
                 "intern",

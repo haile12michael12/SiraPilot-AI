@@ -11,7 +11,7 @@ RELEASE_VERSION="${1:-1.1.0}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/job-tracker-install.XXXXXX")"
 PROJECT="job-tracker-install-${RANDOM}${RANDOM}"
 export DOCKER_CONFIG="$WORK/docker-config"
-export JOB_TRACKER_IMAGE="ghcr.io/muatasim-aswad/job-tracker:v$RELEASE_VERSION"
+export JOB_TRACKER_IMAGE="ghcr.io/haile12michael12/sirapilot-ai:v$RELEASE_VERSION"
 export TURSO_DATABASE_URL= TURSO_AUTH_TOKEN=
 mkdir -p "$DOCKER_CONFIG" "$WORK/current" "$WORK/released"
 COMPOSE_DIR="$WORK/released"

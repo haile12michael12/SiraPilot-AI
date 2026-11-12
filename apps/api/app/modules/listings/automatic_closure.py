@@ -143,5 +143,5 @@ def _timestamps_near(left: str, right: str) -> bool:
         return abs(
             (datetime.fromisoformat(left) - datetime.fromisoformat(right)).total_seconds()
         ) <= (LEGACY_MATCH_SECONDS)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return False
