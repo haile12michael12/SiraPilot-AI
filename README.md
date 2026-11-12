@@ -1,93 +1,81 @@
-# SiraPilot AI
+# Job Tracker
 
-SiraPilot AI is a career-planning workspace. Phase 0 establishes the React
-application shell, FastAPI service, PostgreSQL and Redis configuration, and
-local background-worker infrastructure. Career workflows and integrations are
-intentionally not implemented yet.
+**Track the opportunity, not the website where you found it.**
 
-## Run the full stack
+A job search rarely stays in one place. The same opportunity can appear in a search, return under a new URL, arrive by email, and become an application whose history is scattered across bookmarks, notes, and inbox messages. Spreadsheets and generic project boards can store those fragments, but leave you to connect them.
 
-Requirements: Docker Engine with Docker Compose v2.
+Job Tracker is a self-hosted workspace built around one lasting record per job. Listings, status changes, notes, decisions, and materials stay attached to that opportunity. A browser extension captures details and reliable lifecycle updates, while a local Kanban dashboard keeps the process visible and under your control.
 
-```powershell
-Copy-Item .env.example .env
-docker compose up --build
-```
+Job Tracker gives AI agents structured context about your opportunities, application history, notes, and materials to support job-search decisions and application preparation. Agents can discover the API through the running server's OpenAPI schema at `/openapi.json`.
 
-Open [http://localhost:8080](http://localhost:8080). The API documentation is
-at [http://localhost:8000/docs](http://localhost:8000/docs); the readiness
-endpoint is [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health).
+![Job Tracker overview](docs/images/social-preview.png)
 
-The sample `.env` values are for local development only. Replace them with
-managed secrets before deploying anywhere shared or public.
+## Features
 
-## Local development
+- **One opportunity, one history.** Keep multiple listing URLs, status changes, notes, events, decisions, and materials connected to the same job.
+- **Capture what can be captured.** Record supported listing details and lifecycle updates while you browse instead of retyping them later.
+- **Reuse answers without giving up control.** Fill supported LinkedIn Easy Apply questions from exact, reviewed Matches; preserve existing values and keep unsupported controls, navigation, and submission manual.
+- **Catch reposts without losing control.** Review suggested matches, confirm genuine reposts, and preserve the history already gathered; merging is never automatic.
+- **Decide with context.** Surface experience requirements, languages, pay, seniority, applicant activity, listing age, custom terms, and company history with the evidence around each signal.
+- **Act where you encounter the job.** Use in-page controls or the context-seeded popup to search, update status, backdate events, comment, add notes, or create a job manually.
+- **Follow through.** Use a correctable timeline, attention rules, material records, custom fields, and a Kanban dashboard to keep applications moving.
+- **Stay local and extensible.** Use SQLite by default, opt into Turso synchronization, and add new built-in or private integrations through the adapter model.
 
-Start the PostgreSQL and Redis services:
+[Explore all features and workflows](docs/FEATURES.md), including automation boundaries, repost handling, decision signals, and follow-up tools.
 
-```powershell
-Copy-Item .env.example .env
-docker compose up -d postgres redis
-```
+## What's built in today
 
-In a Python 3.11+ environment, install and start the API:
+| Surface | Support |
+| --- | --- |
+| LinkedIn jobs | Listing capture and in-page triage on search cards and job details; user-controlled filling for supported Easy Apply questions |
+| LinkedIn job emails in Gmail | Recognizes supported messages and adds tracker actions |
+| Sites without a built-in integration | Add a job manually from the popup |
 
-```powershell
-Set-Location backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-alembic upgrade head
-uvicorn app.main:app --reload
-```
+LinkedIn and supported LinkedIn job emails in Gmail are the only built-in integrations today. The integration layer is designed to support additional built-in or private/local adapters without changing the core job model.
 
-In a separate terminal with Node.js 20+:
+These unofficial integrations depend on third-party page layouts, may require adapter updates when those layouts change, and remain subject to each platform’s terms.
 
-```powershell
-Set-Location frontend
-npm ci
-npm run dev
-```
+## See it in action
 
-Vite serves the frontend on port 5173 and proxies API requests to port 8000.
-For local background processing, run the worker and scheduler from `backend/`:
+Watch the 2½-minute narrated demo: follow a job from Gmail to LinkedIn, review reposts and remembered Easy Apply answers, use the extension on an employer’s website, and bring the connected history into an AI prompt.
 
-```powershell
-celery -A app.workers.celery_app:celery_app worker --loglevel=INFO
-celery -A app.workers.celery_app:celery_app beat --loglevel=INFO
-```
+https://github.com/user-attachments/assets/9a478d3d-425c-4217-aa50-1cb8c1550dc4
 
-See [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for environment details,
-testing, and troubleshooting.
+[Download the MP4](https://github.com/Muatasim-Aswad/job-tracker/raw/refs/heads/main/docs/videos/job-tracker-demo.mp4).
 
-## Validation
+### Dashboard
 
-```powershell
-# frontend/
-npm test
-npm run build
+Keep every opportunity and its current stage visible from the local Kanban dashboard.
 
-# backend/
-pytest
-alembic upgrade head
-```
+![Job Tracker dashboard](docs/images/dashboard.png)
 
-Database readiness uses a real `SELECT 1` against PostgreSQL. The initial
-migration is deliberately an empty baseline: no career-domain tables are
-introduced in Phase 0. See [docs/DATABASE.md](./docs/DATABASE.md).
+### Browser extension
 
-## Project structure
+Capture job details, review decision signals, and update tracked opportunities without leaving the listing.
 
-- `frontend/` — React, TypeScript, Vite, Tailwind, and the dashboard shell.
-- `backend/` — FastAPI, SQLAlchemy, Alembic, structured logs, and Celery.
-- `infrastructure/` — Docker and Nginx configuration.
-- `docs/` — architecture, development, database, security, and roadmap.
+![Job Tracker browser extension](docs/images/extension.png)
 
-The dashboard emphasizes a clear career starting point, visible service
-readiness, and simple next-step navigation. Those interaction priorities were
-informed by the public career workflow in
-[career-ops](https://github.com/career-ops-hq/career-ops), the workspace
-organization in [Ekko Studio](https://github.com/EKKOLearnAI/hermes-web-ui),
-and the planning patterns in
-[Super Productivity](https://github.com/johannesjo/super-productivity).
-No source code from those projects is included.
+## Data and privacy
+
+Job Tracker is a single-user, self-hosted application designed for localhost use. By default, records—including verified form Answers and remembered values awaiting review—stay in a local SQLite file on your own machine; Turso synchronization is optional. Database backups and optional Turso synchronization include those retained private values. The extension talks only to the configured Job Tracker server, uses no third-party analytics, and keeps optional search diagnostics off by default.
+
+On Gmail, the extension recognizes supported LinkedIn job messages in the browser and sends only the structured job and action data needed by the tracker; it does not send or store the email body as a job description. See [Privacy](PRIVACY.md) for captured fields, permissions, retention, and deletion, and [Security](SECURITY.md) for the supported localhost threat model.
+
+## Installation
+
+Run from [source](docs/DEPLOYMENT.md#install-from-source), use [Docker Compose](docs/DEPLOYMENT.md#run-with-docker-compose), or download a [Linux/WSL2 release](docs/DEPLOYMENT.md#install-a-linux-x86_64-release). Open <http://localhost:3456> and [load the matching extension](docs/DEPLOYMENT.md#load-the-extension).
+
+[Deployment](docs/DEPLOYMENT.md) covers requirements, setup, updates, backups, and optional [srvr home-server management](docs/DEPLOYMENT.md#optional-manage-a-home-server-with-srvr).
+
+## Project documentation
+
+- Architecture and component boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- API, configuration, database modes, and maintenance: [`apps/api/README.md`](apps/api/README.md)
+- Dashboard development: [`apps/web/README.md`](apps/web/README.md)
+- Extension build, keyboard controls, and adapter guide: [`apps/extension/README.md`](apps/extension/README.md)
+- Private/local adapter overlay: [`docs/PRIVATE.md`](docs/PRIVATE.md)
+- Developer policy — quality gate, generated files, comment and Markdown style, migrations, and versioning: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
+- Contributions and support: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Release history: [`CHANGELOG.md`](CHANGELOG.md)
+
+Licensed under the [MIT License](LICENSE).

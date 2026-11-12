@@ -1,102 +1,153 @@
-# Development
+# Development guide
 
-## Requirements
+Repository-wide contributor setup and policy live here; component-specific implementation and commands stay with their component documentation:
 
-- Docker Engine and Docker Compose v2 for the complete stack.
-- Node.js 20+ and npm for frontend development.
-- Python 3.11+ for the API, tests, and workers.
+| Topic | Authority |
+| --- | --- |
+| End-user prerequisites, setup, install, and normal startup | [`docs/DEPLOYMENT.md`](DEPLOYMENT.md) |
+| Distribution artifacts, packaged paths, lifecycle, upgrades, and platform support | [`docs/DISTRIBUTION.md`](DISTRIBUTION.md) |
+| Repository-wide contributor setup, full-app launcher, and quality gate | This guide |
+| User-facing features and workflows | [`docs/FEATURES.md`](FEATURES.md) |
+| Component structure and invariants | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) |
+| API-specific commands, configuration, database modes, backup/restore | [`apps/api/README.md`](../apps/api/README.md) |
+| Extension build, adapters, keyboard controls | [`apps/extension/README.md`](../apps/extension/README.md) |
+| Dashboard development | [`apps/web/README.md`](../apps/web/README.md) |
+| Private/local adapter overlay | [`docs/PRIVATE.md`](PRIVATE.md) |
+| Captured data, retention, and permissions | [`PRIVACY.md`](../PRIVACY.md) |
+| Threat model and reporting | [`SECURITY.md`](../SECURITY.md) |
+| Release history | [`CHANGELOG.md`](../CHANGELOG.md) |
+| Contribution and support workflow | [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
 
-## Environment
+## Local development
 
-At the repository root, copy the example and keep the resulting `.env`
-uncommitted:
+After cloning or forking the repository, install [mise](https://mise.jdx.dev/getting-started.html), then prepare the workspace from its root:
 
-```powershell
-Copy-Item .env.example .env
+```bash
+mise trust
+mise install
+mise run setup
 ```
 
-The example contains local-only PostgreSQL credentials and a development
-signing secret. Do not reuse either value in staging or production. The API
-validates required settings on startup. `DATABASE_URL` must use
-`postgresql+psycopg`, `REDIS_URL` must use `redis` or `rediss`, `SECRET_KEY`
-must contain at least 32 characters, and `CORS_ORIGINS` is a JSON array of
-specific origins.
+Start the assembled application for contributor work with:
 
-## Full Docker stack
-
-```powershell
-docker compose up --build
-docker compose ps
-docker compose logs -f backend worker beat
+```bash
+mise run dev
 ```
 
-The frontend is at `http://localhost:8080`; API docs are at
-`http://localhost:8000/docs`. Compose waits for PostgreSQL and Redis health
-before starting the API, then waits for API readiness before starting the
-frontend and workers. PostgreSQL data and Redis append-only data use named
-volumes.
+The development launcher performs the same built-dashboard preflight as the normal launcher, binds to `127.0.0.1:3456`, and enables Uvicorn's automatic reload. For a component-only workflow such as Vite hot reload or starting just the API, use the commands in the relevant component README.
 
-Stop the services with `docker compose down`. To intentionally remove local
-database and Redis data as well, use `docker compose down --volumes`.
+`mise.toml` is the sole source for exact Node, Python, pnpm, and uv versions; CI and Docker use it too. Package manifests retain compatibility requirements only where needed. pnpm uses mise’s npm backend for portable binaries, without Corepack. `UV_PYTHON=python` selects mise’s interpreter. Change versions there, run `mise lock --platform linux-x64,macos-x64,macos-arm64`, and commit `mise.lock` plus `.mise/locks/`. Do not edit generated locks.
 
-## Run services on the host
+`mise tasks` lists setup, start, dev, check, test, build, API generation, and container smoke commands. Existing scripts and package commands remain usable with the pinned tools on `PATH`; `mise run check` wraps `bash scripts/check.sh`.
 
-Use Compose for PostgreSQL and Redis, then run each application process in a
-separate terminal. The Compose ports bind to the local development host.
+## Quality gate
 
-```powershell
-docker compose up -d postgres redis
-Set-Location backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-alembic upgrade head
-uvicorn app.main:app --reload
+`bash scripts/check.sh` is the single local entry point and runs the CI-equivalent gates: private-overlay drift, launcher/setup and release-contract tests, formatting, linting, type checking, tests, builds, generated-API drift, Markdown formatting, and version consistency. Linux also runs deterministic production of the Linux x86_64 artifacts; macOS skips that Linux-only production step while retaining every source-checkout gate. Its WSL2 check is a static safety self-test, not external WSL2 evidence, and it does not run Docker, use credentials, publish, or contact a Turso database. Run it before calling a change done; a green run is what CI reproduces for that platform, while release approval still requires the Linux artifact gates documented in the release procedure.
+
+The Python test task passes `TMPDIR` through for disposable pytest and wheel-build fixtures; use an owned disk-backed directory when `/tmp` has insufficient quota. This storage location is not a cached test-result input.
+
+Git hooks run a subset earlier so failures surface sooner. Install them once:
+
+```bash
+uv run --directory apps/api pre-commit install
 ```
 
-```powershell
-Set-Location frontend
-npm ci
-npm run dev
+Formatters that rewrite files stop at the commit stage — a push-stage fixer would land its fix in the working tree, outside the commits being pushed. The push stage re-checks the same ground in report-only form.
+
+Individual tasks (`pnpm exec vp run test`, `uv run --directory apps/api pytest`, and the per-component scripts in each README) exist for fast iteration, but they are not a substitute for the gate.
+
+## Source and generated files
+
+Generated source artifacts are tracked so that a clean checkout builds and type-checks without first booting the server, but they are never hand-edited. Each has one generator, and the gate fails on drift:
+
+| Generated file | Generator | Source of truth |
+| --- | --- | --- |
+| `apps/web/public/{pwa-192,pwa-512,apple-touch-icon}.png` | `rsvg-convert` commands in the [dashboard README](../apps/web/README.md#installable-app) | `apps/web/public/app-icon.svg` |
+| `packages/shared/src/api/schema.ts` | `pnpm --filter @job-tracker/shared gen:api` | FastAPI route and model definitions |
+| `packages/shared/src/funnel/funnel.contract.json` | API test suite | `apps/api/app/shared/enums.py` |
+| `packages/shared/src/text/text.golden.json` | API test suite | `apps/api/app/shared/text.py` |
+| Artifact `BUILD_INFO.json` and frontend `version.json` | `scripts/build-metadata.py` and frontend identity plugin | `VERSION`, verified original Git source or explicit export attestation, and `SOURCE_DATE_EPOCH` |
+| Artifact `THIRD_PARTY_NOTICES*.txt` and `THIRD_PARTY_INVENTORY*.json` | `scripts/third-party-notices.{mjs,py}` | Bundled frontend module/asset licenses and locked production Python dependency licenses |
+
+Build output (`apps/*/dist/`), including `apps/extension/dist/manifest.json`, tool caches, and the four gitignored private overlay directories are not tracked. `pnpm run build:ext` regenerates the manifest from `apps/extension/manifest.config.ts` and the root `VERSION`; the gate builds and version-checks it. Changing a tracked generated artifact's shape means changing its generator and committing the regenerated result in the same change.
+
+## Code structure and readability
+
+[Architecture](ARCHITECTURE.md#api-organization) owns layer boundaries; the [API](../apps/api/README.md#layout) and [dashboard](../apps/web/README.md#source-ownership) guides map implementation files to their owners.
+
+- Keep each function, component, and module responsible for a coherent operation. Extract substantial independent logic into named local helpers, components, or hooks; reuse is not required. Keep feature directories flat unless grouping several files improves navigation.
+- Separate logical steps with one blank line. Prefer guard clauses, named intermediate values, and typed records over unnecessary nesting, nested conditional expressions, or opaque positional structures. Use conventional multiline layout for complex calls, SQL, and data construction.
+- Choose functions and classes by clarity. Prefer module functions for stateless services, repositories, and providers when equally clear. Keep classes for configuration, meaningful instance state, resource lifecycle, or cohesive behavior; data models and exceptions remain classes. Do not manufacture closures merely to avoid classes.
+- Keep FastAPI `Request`, `Depends`, and application-state access in routers/providers. Put configured providers and reusable `Annotated` aliases together in the owning feature's `dependencies.py`; shared resource access belongs in `platform.dependencies`. Application and repository code receives ordinary typed arguments, including configuration.
+- Keep endpoint adapters, query keys/options, mutations, and cache behavior with the dashboard feature. Extract hooks for coherent React behavior and ordinary functions for pure draft, request, and review calculations. Keep draft ownership visible in the component that manages it.
+- Keep typed UI copy with its feature or application owner. Keep display formatting separate from protocol values, preserving the existing browser locale/time-zone selection and formatting fallbacks. User-authored data and developer diagnostics are separate from UI copy.
+- Review structure as well as formatter output. Avoid arbitrary line-count limits and generic abstractions that only relocate complexity.
+
+### Tests and contracts
+
+Protect behavior through HTTP scenarios, public application operations, pure exported rules, and database/runtime lifecycle interfaces. Keep useful fast integration and pure unit tests; use disposable databases and synthetic fixtures. For a behavior-preserving extraction, retain behavioral assertions and change only necessary imports/setup. Add passing characterization coverage before production changes when a meaningful guarantee lacks coverage.
+
+Generated contracts remain governed by [source and generated files](#source-and-generated-files). Test mechanics and executable dependency checks live in the component guides; the [quality gate](#quality-gate) remains required.
+
+## Comments and documentation
+
+Treat comments and documentation as release artifacts:
+
+- Use concise, plain language without dropping necessary meaning.
+- Explain intent, invariants, constraints, and non-obvious tradeoffs.
+- Prefer clearer code and names over comments that restate the implementation.
+- Remove historical narration, repeated facts, padding, and phrases that add no useful context.
+- Keep each fact in one authoritative place and link to it when needed.
+- Keep examples, commands, behavior descriptions, and version information accurate in the same change that affects them.
+- Preserve important context when shortening text. A comment should explain why the code exists or what must remain true, not translate the code into prose.
+
+## Markdown formatting
+
+Prettier owns Markdown formatting, pinned in `package.json` and configured in `.prettierrc.json`. It is deliberately configured **not** to hard-wrap prose: a paragraph is one line, and your editor supplies the visual wrapping. This keeps diffs to the sentences that actually changed instead of reflowing whole paragraphs, and removes hand-cleaning from review.
+
+```bash
+pnpm run format:md   # write
+pnpm run check:md    # report only, as scripts/check.sh runs it
 ```
 
-Vite defaults to proxying API traffic to `http://127.0.0.1:8000`. Set
-`VITE_API_PROXY_TARGET` in the frontend process environment to use a different
-local API host.
+Hard breaks, lists, tables, links, and fenced code keep their structure — only prose wrapping is normalized. `.prettierignore` excludes build output, dependencies, and `docs/plans/`, which holds immutable execution plans rather than public documentation.
 
-Run background processes from `backend/` when needed:
+This policy covers Markdown only. Ruff formats Python and the workspace TypeScript formatter (`vp fmt`, oxfmt) formats TypeScript; neither defers to Prettier.
 
-```powershell
-celery -A app.workers.celery_app:celery_app worker --loglevel=INFO
-celery -A app.workers.celery_app:celery_app beat --loglevel=INFO
-```
+## Database migration compatibility
 
-## Tests and checks
+`apps/api/app/core/schema.sql` is the 1.0.0 baseline: every pre-release migration is folded into it, so `_COLUMN_MIGRATIONS` and `_DATA_MIGRATIONS` in `apps/api/app/infra/database.py` were both empty at that release. See [architecture](ARCHITECTURE.md#database-and-synchronization) for how migrations are applied.
 
-From `frontend/`:
+After 1.0.0, migrations are **append-only**:
 
-```powershell
-npm test
-npm run build
-```
+- Add new entries at the end. Never edit, reorder, or remove a released entry: it has already run on some user databases and not others, so changing it makes those two states diverge silently.
+- Give every migration a stable, unique key. The key is the ledger row in `schema_migrations` and the only record that it ran.
+- Keep column migrations additive. Dropping or retyping a column breaks an older client still reading the same synchronized database.
+- Migrations run at server start against whatever database is configured, including a Turso primary. Assume real data and no operator supervision, and back up first ([procedure](../apps/api/README.md#backup--restore)).
+- Cover a new migration with a test that starts from a database in the _old_ shape and asserts the repair, and one that proves re-running it is a no-op.
 
-From `backend/`:
+A change that cannot be expressed additively is a breaking change and needs a major version bump plus an explicit note in `CHANGELOG.md`.
 
-```powershell
-pytest
-alembic upgrade head
-```
+## Releases and versions
 
-The backend tests use SQLite in memory for deterministic connection/readiness
-checks; the Compose backend readiness probe checks the actual PostgreSQL
-connection. Run `alembic upgrade head` with the configured PostgreSQL service
-to verify an environment's migration connectivity.
+The repository root `VERSION` file is the one product version, in SemVer. It covers the extension, the dashboard, and the server together — they ship from the same commit and are not independently versioned.
 
-## Troubleshooting
+Everything else derives from it: `apps/extension/manifest.config.ts` reads it into the built manifest, and `apps/api/app/core/version.py` reads it into the API's OpenAPI metadata. `apps/extension/package.json` deliberately declares no `version` at all, and `apps/api/pyproject.toml`'s version is packaging metadata uv requires — neither is a release authority, and nothing ships either number. `bash scripts/check-version.sh` (part of the gate) fails if the canonical value, the built manifest, the API metadata, or a `vX.Y.Z` tag disagree.
 
-- If Compose reports unset variables, confirm `.env` is in the repository
-  root and contains every value from `.env.example`.
-- If local ports are occupied, adjust `POSTGRES_PORT` in `.env`; frontend and
-  API host ports can be changed in `docker-compose.yml`.
-- If an API request fails in the browser, check `/health/ready`, then inspect
-  `docker compose logs backend postgres`.
+Decide the bump from user-visible effect, in any component:
+
+| Bump | When |
+| --- | --- |
+| Patch (`x.y.Z`) | Fixes and internal work with no new capability |
+| Minor (`x.Y.0`) | New capability: an adapter surface, a setting, a dashboard or API feature |
+| Major (`X.0.0`) | A breaking change, including a non-additive database change |
+
+Source installs from `main` are a distribution channel. Before merging a change set that affects shipped behavior, bump `VERSION` from the current `main` version and add a dated, versioned `CHANGELOG.md` entry in the same change. Use the largest applicable bump once per change set, not once per intermediate commit. Documentation-only changes need no bump; `Unreleased` may hold planned work. Artifact publication tags and packages the existing version as `vX.Y.Z`; it does not introduce a delayed version bump. Keep Compose and clone-free installation references pinned to the last published artifacts while source advances; align those references with `VERSION` before tagging the next artifact release. The gate rejects a tag that disagrees with `VERSION`, and any tag that does not match `vX.Y.Z`.
+
+## Platform support
+
+Linux and macOS source checkouts are supported. Packaged support is narrower: the runtime bundle and wheel are proven only on Linux x86_64, and the optional container is Linux/amd64 only. A passing source-checkout gate on macOS is not evidence for a macOS runtime bundle or wheel.
+
+Native Windows is unsupported: the setup and run scripts are Bash, and the locked `libsql`/`pyturso` dependency set has no straightforward native-Windows wheel path. The Linux runtime bundle is supported on Windows 11 WSL2 x86_64 when all mutable state stays in the Linux filesystem; the external lifecycle and Windows Chromium evidence is recorded in [`docs/evidence/wsl2-1.1.0.md`](evidence/wsl2-1.1.0.md).
+
+Supporting native Windows would require supported dependency artifacts or a database-driver decision, portable launcher commands and paths, and a Windows setup/runtime CI smoke test. Until those exist, do not add speculative compatibility edits that no test can hold in place.

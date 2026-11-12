@@ -1,0 +1,1123 @@
+// Fixture tests keep selector drift from silently stopping capture.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { linkedinAdapter } from "./web";
+import { refreshStates, stateOf } from "../../../engine";
+import { setAdapters } from "../../../registry";
+import { installFakeChrome } from "../../../test-support/fakeChrome";
+import { installCssEscape } from "../../../test-support/cssEscape";
+import type { BridgeRequest } from "../../../messages";
+
+const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+const loadFixture = (name: string) => readFileSync(path.join(FIXTURES, name), "utf8");
+
+beforeEach(() => {
+  setAdapters([linkedinAdapter]);
+  installCssEscape();
+});
+
+describe("linkedin adapter — search list findCards", () => {
+  it("tags a card with its NaturalKey and scraped title/company/location", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-card.html");
+
+    const cards = linkedinAdapter.findCards(document);
+
+    expect(cards).toHaveLength(1);
+    const [card] = cards;
+    expect(card.dataset.jhId).toBe("LI-100001");
+    expect(card.dataset.jobTitle).toBe("Example Backend Engineer at Example Labs");
+    expect(card.dataset.jobCompany).toBe("Example Labs");
+    expect(JSON.parse(card.dataset.jobMeta!)).toEqual({
+      card_location: "Example City, Exampleland",
+      workplace: "Hybrid",
+    });
+    expect(card.dataset.jhCompact).toBe("1");
+    expect(card.dataset.jobUrl).toBe(
+      "https://www.linkedin.com/jobs/view/100001/?refId=example&trackingId=example",
+    );
+
+    expect(linkedinAdapter.naturalKey!(card.dataset.jhId!)).toEqual({
+      platform: "linkedin",
+      platform_id: "100001",
+    });
+  });
+});
+
+describe("linkedin adapter — detail head", () => {
+  const chipTexts = () =>
+    [...document.querySelectorAll(".jh-detail-head .jh-banner-chip")].map((c) => c.textContent);
+
+  // Analytics can arrive after the description; later scans must refresh the head.
+  it("adds a chip whose signal renders after the first pass", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    installFakeChrome();
+    const applicants = [...document.querySelectorAll("span")].find(
+      (el) => el.textContent === "25 people clicked apply",
+    )!;
+    applicants.remove();
+
+    linkedinAdapter.scanDetail!();
+    expect(chipTexts()).toEqual(["17d"]);
+
+    document
+      .querySelector(".job-details-jobs-unified-top-card__container--two-pane")!
+      .appendChild(applicants);
+    linkedinAdapter.scanDetail!();
+
+    expect(chipTexts()).toEqual(["17d", "25 clicks"]);
+  });
+
+  // The chip's own text is the fact; the tint only ranks it. Reading the unit is what
+  // separates the two — a plain leading number calls a 16-hour-old posting 16 days old.
+  it.each([
+    ["16 hours ago", "16h", "jh-banner-chip--good"],
+    ["17 days ago", "17d", "jh-banner-chip--warn"],
+    // Days, not "2 months ago": a calendar month's length would move the expectation.
+    ["40 days ago", "40d", "jh-banner-chip--faded"],
+  ])("tints a posting of %s by its real age", (age, text, tone) => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    installFakeChrome();
+    const posted = [...document.querySelectorAll("span")].find(
+      (el) => el.textContent!.trim() === "17 days ago",
+    )!;
+    posted.textContent = age;
+
+    linkedinAdapter.scanDetail!();
+
+    const chip = document.querySelector(".jh-detail-head .jh-banner-chip")!;
+    expect(chip.textContent).toBe(text);
+    expect(chip.classList.contains(tone)).toBe(true);
+    expect((chip as HTMLElement).title).toBe("Posted " + age);
+  });
+
+  // An ordinary job raises no ⚠ at all. Box stacking across all three kinds is covered
+  // in dom.test.ts, where a policy is loaded; this fixture's storage never lands one,
+  // so it yields no keyword findings.
+  it("shows a quiet stats strip and no ⚠ on an ordinary job", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    const boxes = [...document.querySelectorAll(".jh-detail-banner > *")].map((b) => b.className);
+    expect(boxes).toEqual(["jh-banner-stats"]);
+    expect(document.querySelector(".jh-banner-icon")).toBeNull();
+  });
+
+  it("tints the apply-click count only at LinkedIn's cap", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    installFakeChrome();
+    const clicks = [...document.querySelectorAll("span")].find(
+      (el) => el.textContent === "25 people clicked apply",
+    )!;
+    const lastChip = () => [...document.querySelectorAll(".jh-banner-chip")].at(-1)!;
+
+    linkedinAdapter.scanDetail!();
+    // Below the cap the number is role-dependent: stated, not ranked.
+    expect(lastChip().textContent).toBe("25 clicks");
+    expect(lastChip().className).toBe("jh-banner-chip");
+
+    clicks.textContent = "Over 100 people clicked apply for this job";
+    linkedinAdapter.scanDetail!();
+
+    expect(lastChip().textContent).toBe("100 clicks");
+    expect(lastChip().classList.contains("jh-banner-chip--warn")).toBe(true);
+  });
+
+  // The same sign that closes the job automatically. Reading it twice from one
+  // predicate is what keeps the alert from claiming a state the funnel disagrees with.
+  it("raises LinkedIn's closed sign as an alert", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+    expect(document.querySelector(".jh-banner-alert")).toBeNull();
+
+    const sign = document.createElement("p");
+    sign.textContent = "No longer accepting applications";
+    document.querySelector(".job-details-jobs-unified-top-card__container--two-pane")!.append(sign);
+    linkedinAdapter.scanDetail!();
+
+    const alert = document.querySelector(".jh-banner-alert")!;
+    expect(alert.textContent).toContain("closed to applications");
+    expect(alert.querySelector(".jh-banner-icon")!.textContent).toBe("⚠");
+  });
+
+  it("leaves an unchanged head in place, so a copy confirmation survives a scan", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+    const head = document.querySelector(".jh-detail-head");
+    linkedinAdapter.scanDetail!();
+
+    expect(document.querySelector(".jh-detail-head")).toBe(head);
+  });
+});
+
+describe("linkedin adapter — unavailable detail", () => {
+  function setup(jobId: string, status: string) {
+    document.body.innerHTML = loadFixture("linkedin-unavailable.html");
+    window.history.pushState({}, "", `/jobs/view/${jobId}/`);
+    const chrome = installFakeChrome();
+    chrome.onMessage.addListener((message: unknown) => {
+      const request = message as {
+        type?: string;
+        platform_ids?: string[];
+      };
+      if (request.type === "state-batch") {
+        return {
+          ok: true,
+          result: request.platform_ids?.map((platform_id) => ({
+            platform_id,
+            status,
+            hidden: false,
+            starred: false,
+          })),
+        };
+      }
+      if (request.type === "listing") {
+        return { ok: true, result: { job_id: "job-1", listing_id: "listing-1" } };
+      }
+      if (request.type === "event") {
+        return { ok: true, result: { status, hidden: false, starred: false } };
+      }
+      return undefined;
+    });
+    return chrome;
+  }
+
+  it("closes a tracked listing without recording the error page as seen", async () => {
+    const jobId = "4454569387";
+    const { sendMessage } = setup(jobId, "new");
+    const requestTypes = () =>
+      sendMessage.mock.calls.map(([message]) => (message as { type: string }).type);
+
+    linkedinAdapter.scanDetail!();
+    linkedinAdapter.capture!();
+
+    await vi.waitFor(() =>
+      expect(sendMessage).toHaveBeenCalledWith(
+        {
+          type: "listing",
+          payload: {
+            platform: "linkedin",
+            platform_id: jobId,
+            capture_kind: "partial",
+            closed_at: expect.any(String),
+          },
+        },
+        expect.any(Function),
+      ),
+    );
+    await vi.waitFor(() => expect(requestTypes()).toContain("close-bulk-job-tab"));
+    expect(requestTypes()).toEqual(["state-batch", "listing", "close-bulk-job-tab"]);
+  });
+
+  it("does not create a stub for an untracked invalid id", async () => {
+    const { sendMessage } = setup("4454569388", "untracked");
+
+    linkedinAdapter.scanDetail!();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sendMessage.mock.calls.map(([message]) => (message as { type: string }).type)).toEqual([
+      "state-batch",
+    ]);
+  });
+});
+
+// The posted_at derivation is anchored to the capture instant, so the clock is
+// frozen: "17 days ago" captured at 2026-07-20T12:00:00Z is a fixed instant.
+const CAPTURED_AT = "2026-07-20T12:00:00.000Z";
+
+describe("linkedin adapter — detail capture", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(CAPTURED_AT));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("scrapes the open posting into the expected ListingRecord", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [message] = sendMessage.mock.calls[0]!;
+    expect(message).toEqual({
+      type: "listing",
+      payload: {
+        platform: "linkedin",
+        platform_id: "100001",
+        capture_kind: "detail",
+        url: "https://www.linkedin.com/jobs/view/100001/",
+        title: "Example Backend Engineer",
+        company: "Example Labs",
+        apply_type: "easy_apply",
+        availability: "open",
+        availability_message: null,
+        availability_observed_at: CAPTURED_AT,
+        meta: {
+          company_url: "https://www.linkedin.com/company/example-labs/",
+          posted_at: "2026-07-03T12:00:00.000Z",
+          posted_precision: "estimated",
+          posted_age: "17 days ago",
+          applicants: 25,
+          location: "Example City, Exampleland",
+          workplace: "Remote",
+          salary: null,
+          match_level: null,
+          chips: ["Remote", "Full-time"],
+          poster: null,
+          poster_url: null,
+          description:
+            "We build developer tools used by thousands of engineers.\n" +
+            "Requirements: 5+ years of experience with TypeScript and distributed systems.",
+        },
+      },
+    });
+  });
+
+  it.each([
+    [
+      "LinkedIn's safety redirect",
+      "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fbackend%3Fsource%3Dlinkedin",
+    ],
+    ["a direct link", "https://jobs.example.com/backend?source=linkedin"],
+  ])("captures the destination from %s", (_kind, href) => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    document.getElementById("jobs-apply-button-id")!.outerHTML =
+      `<a aria-label="Apply on company website" href="${href}">Apply</a>`;
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    const [message] = sendMessage.mock.calls[0]!;
+    expect(message).toMatchObject({
+      type: "listing",
+      payload: {
+        apply_type: "external",
+        meta: {
+          apply_url: "https://jobs.example.com/backend?source=linkedin",
+        },
+      },
+    });
+  });
+
+  // A slug URL must yield the identical record, canonical url included: the trailing
+  // id alone identifies the posting.
+  it("captures the same posting when opened by its slug url", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/example-backend-engineer-at-example-labs-100001/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [message] = sendMessage.mock.calls[0]!;
+    expect((message as { payload: Record<string, unknown> }).payload).toMatchObject({
+      platform: "linkedin",
+      platform_id: "100001",
+      url: "https://www.linkedin.com/jobs/view/100001/",
+      title: "Example Backend Engineer",
+    });
+  });
+
+  // A same-document search card supplies exact date evidence that takes precedence
+  // over the detail card's relative age.
+  it("prefers the list card's absolute date over the relative age", () => {
+    document.body.innerHTML =
+      loadFixture("linkedin-search-card.html") + loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    const [message] = sendMessage.mock.calls[0]!;
+    expect((message as { payload: { meta: Record<string, unknown> } }).payload.meta).toMatchObject({
+      posted_at: "2026-07-19T00:00:00.000Z",
+      posted_precision: "exact",
+      posted_age: "17 days ago",
+    });
+  });
+
+  // Missing age evidence must not produce an invented date.
+  it("emits a null posted_at when the page shows no age", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    [...document.querySelectorAll("span")].find((el) => el.textContent === "17 days ago")!.remove();
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    const [message] = sendMessage.mock.calls[0]!;
+    expect((message as { payload: { meta: Record<string, unknown> } }).payload.meta).toMatchObject({
+      posted_at: null,
+      posted_precision: null,
+      posted_age: null,
+      location: "Example City, Exampleland",
+    });
+  });
+
+  it.each([
+    ["Reposted 1 week ago", "2026-07-13T12:00:00.000Z"],
+    ["Posted 30+ days ago", "2026-06-20T12:00:00.000Z"],
+    ["an hour ago", "2026-07-20T11:00:00.000Z"],
+    ["1 year ago", "2025-07-20T12:00:00.000Z"],
+    ["just now", CAPTURED_AT],
+  ])("captures decorated age evidence %s", (age, at) => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    [...document.querySelectorAll("span")].find(
+      (el) => el.textContent === "17 days ago",
+    )!.textContent = age;
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage.mock.calls[0]![0]).toMatchObject({
+      payload: {
+        meta: {
+          posted_age: age,
+          posted_at: at,
+          posted_precision: "estimated",
+          location: "Example City, Exampleland",
+        },
+      },
+    });
+  });
+
+  it("emits a null location when the top-card line opens with the age", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    [...document.querySelectorAll("span")]
+      .find((el) => el.textContent === "Example City, Exampleland")!
+      .nextElementSibling!.remove();
+    [...document.querySelectorAll("span")]
+      .find((el) => el.textContent === "Example City, Exampleland")!
+      .remove();
+    window.history.pushState({}, "", "/jobs/view/100001/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    const [message] = sendMessage.mock.calls[0]!;
+    expect((message as { payload: { meta: Record<string, unknown> } }).payload.meta).toMatchObject({
+      posted_age: "17 days ago",
+      location: null,
+    });
+  });
+});
+
+// B and C share AboutTheJob, so exclusive layout markers must prevent B from claiming C.
+describe("linkedin adapter — layout resolution", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(CAPTURED_AT));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each(
+    ["1 week ago", "Reposted 1 week ago", null].flatMap((age) =>
+      ["/jobs/view/100005/", "/jobs/search-results/?currentJobId=100005"].map(
+        (url) => [url, age] as const,
+      ),
+    ),
+  )("captures a separate location row on %s beside promotion and age %s", (url, age) => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", url);
+    if (url.startsWith("/jobs/view/")) {
+      document.querySelector('[componentkey^="job-card-component-ref-"]')!.remove();
+    }
+    const row = [...document.querySelectorAll("p")].find((el) =>
+      el.textContent!.includes("22 hours ago"),
+    )!;
+    row.outerHTML = `<p><span>Example City, Example Region, Exampleland</span></p>
+        <p><span>Promoted</span> · <span><span><span><span>${age ?? ""}</span></span></span></span> · <span>76 applicants</span> · <span>Responses managed off LinkedIn</span></p>`;
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+    linkedinAdapter.capture!();
+
+    const message = sendMessage.mock.calls.find(
+      ([value]) => (value as BridgeRequest).type === "listing",
+    )?.[0];
+    expect(message).toMatchObject({
+      payload: {
+        meta: {
+          location: "Example City, Example Region, Exampleland",
+          workplace: "On-site",
+          posted_age: age,
+          posted_at: age ? "2026-07-13T12:00:00.000Z" : null,
+        },
+      },
+    });
+  });
+
+  it("does not mistake a promotion badge for a missing location", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    const row = [...document.querySelectorAll("p")].find((el) =>
+      el.textContent!.includes("22 hours ago"),
+    )!;
+    row.innerHTML = "<span>Promoted · 1 week ago · 76 applicants</span>";
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage.mock.calls[0]![0]).toMatchObject({
+      payload: {
+        meta: { location: null, posted_age: "1 week ago", posted_at: "2026-07-13T12:00:00.000Z" },
+      },
+    });
+  });
+
+  it("skips promotion badges preceding a location in the same metadata row", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail-sdui.html");
+    document.title = "Example Senior Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/view/100004/");
+    document.querySelector("p")!.innerHTML =
+      "<span>Promoted · Example City, Exampleland · Reposted 1 week ago · 76 applicants</span>";
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage.mock.calls[0]![0]).toMatchObject({
+      payload: {
+        meta: { location: "Example City, Exampleland", posted_age: "Reposted 1 week ago" },
+      },
+    });
+  });
+
+  // Layout B — the standalone SDUI page. No stable classes, so identity comes from
+  // document.title and the description from the AboutTheJob componentkey.
+  it("captures the standalone SDUI layout through its title and componentkey", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail-sdui.html");
+    document.title = "Example Senior Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/view/100004/");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [message] = sendMessage.mock.calls[0]!;
+    expect(message).toMatchObject({
+      type: "listing",
+      payload: {
+        platform_id: "100004",
+        title: "Example Senior Engineer",
+        company: "Example Labs",
+        apply_type: "easy_apply",
+        meta: {
+          company_url: "https://www.linkedin.com/company/example-labs/",
+          posted_age: "5 days ago",
+          location: "Example City, Exampleland",
+          workplace: null,
+          description:
+            "We build developer tools used by thousands of engineers.\n\n" +
+            "Requirements: 5+ years of experience with TypeScript and distributed systems.",
+        },
+      },
+    });
+  });
+
+  it("gives the standalone SDUI layout a detail head", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail-sdui.html");
+    document.title = "Example Senior Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/view/100004/");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    expect(document.querySelector(".jh-detail-head .jh-banner-copy")).not.toBeNull();
+  });
+
+  // Layout C — the search-results pane. It shares B's description container, so the
+  // layouts are told apart by their own markers, not by which selectors happen to
+  // resolve; what differs is the anchor, which C alone must keep clear of its cards.
+  it("captures the search-results layout", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [message] = sendMessage.mock.calls[0]!;
+    expect(message).toMatchObject({
+      type: "listing",
+      payload: {
+        platform_id: "100005",
+        url: "https://www.linkedin.com/jobs/view/100005/",
+        title: "Example Senior Backend Engineer",
+        company: "Example Labs",
+        meta: {
+          location: "Exampleland",
+          workplace: "On-site",
+          description:
+            "We build developer tools used by thousands of engineers.\n\n" +
+            "Requirements: 5+ years of experience with TypeScript and distributed systems.",
+        },
+      },
+    });
+  });
+
+  it("gives the search-results layout a detail head", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    expect(document.querySelector(".jh-detail-head .jh-banner-copy")).not.toBeNull();
+  });
+
+  // Cards and detail share one document here, so a page-wide "More options" query
+  // anchors the bar inside a card. The detail button is the one outside every card.
+  it("anchors the detail bar outside the search-results cards", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    const bar = document.querySelector(".jh-detail-actions");
+    expect(bar).not.toBeNull();
+    expect(bar!.closest('[componentkey^="job-card-component-ref-"]')).toBeNull();
+    expect(bar!.closest('[data-testid="lazy-column"]')).not.toBeNull();
+  });
+
+  // Wait for lazy descriptions instead of capturing a title-only stub.
+  it("stores nothing until the search-results description arrives", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail-loading.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    const { sendMessage } = installFakeChrome();
+
+    // The container resolves; it is simply still empty.
+    expect(document.querySelector('[componentkey^="JobDetails_AboutTheJob"]')).not.toBeNull();
+
+    linkedinAdapter.capture!();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(document.querySelector(".jh-detail-head")).toBeNull();
+
+    // The description lands on a later scan, and that scan captures.
+    document.querySelector('[componentkey^="JobDetails_AboutTheJob"] > div')!.innerHTML =
+      "<p>We build developer tools used by thousands of engineers.</p>";
+    linkedinAdapter.capture!();
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+});
+// Layout C's list. No card carries an anchor, so identity and the posting url both
+// come from the componentkey.
+describe("linkedin adapter — search-results cards", () => {
+  it("tags each card once, from its componentkey", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-card.html");
+
+    const cards = linkedinAdapter.findCards(document);
+
+    // Four elements carry a card key — an outer and an inner per job — and tagging
+    // both would give every job two action bars.
+    expect(document.querySelectorAll('[componentkey^="job-card-component-ref-"]')).toHaveLength(4);
+    expect(cards).toHaveLength(2);
+    expect(cards.map((c) => c.dataset.jhId)).toEqual(["LI-100002", "LI-100003"]);
+    expect(cards.map((c) => c.dataset.jobTitle)).toEqual([
+      "Example Backend Engineer",
+      "Example Platform Engineer",
+    ]);
+    expect(cards.map((c) => c.dataset.jobCompany)).toEqual(["Example Labs", "Example Labs"]);
+    expect(cards.map((c) => JSON.parse(c.dataset.jobMeta!))).toEqual([
+      { card_location: "Example City", workplace: "Hybrid" },
+      { card_location: "Example City", workplace: "Remote" },
+    ]);
+    // No anchor exists on this surface; the canonical url is rebuilt from the id.
+    expect(cards[0]!.querySelectorAll("a")).toHaveLength(0);
+    expect(cards[0]!.dataset.jobUrl).toBe("https://www.linkedin.com/jobs/view/100002/");
+    expect(cards[0]!.dataset.jhCompact).toBe("1");
+  });
+
+  it("is idempotent across scans", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-card.html");
+
+    expect(linkedinAdapter.findCards(document)).toHaveLength(2);
+    expect(linkedinAdapter.findCards(document)).toHaveLength(0);
+  });
+
+  // The state line is a bare <p> sharing its slot with "Viewed" and "Saved", so the
+  // match is on exact text — a substring test would also hit a job titled
+  // "Applied AI Engineer" and mark an untouched posting as applied.
+  it("reads the applied state without matching a title containing it", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-card.html");
+    const [plain, applied] = linkedinAdapter.findCards(document);
+
+    expect(linkedinAdapter.isAppliedCard!(applied!)).toBe(true);
+    expect(linkedinAdapter.isAppliedCard!(plain!)).toBe(false);
+
+    plain!.querySelector("p")!.textContent = "Applied AI Engineer";
+    expect(linkedinAdapter.isAppliedCard!(plain!)).toBe(false);
+  });
+
+  // LinkedIn's own dismiss control is labelled per job here, not by a stable class.
+  it("drives the site's own dismiss control", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-card.html");
+    const [card] = linkedinAdapter.findCards(document);
+    const btn = card!.querySelector('[aria-label^="Dismiss"]') as HTMLElement;
+    const clicked = vi.fn();
+    btn.addEventListener("click", clicked);
+
+    linkedinAdapter.nativeDismiss!(card!)!();
+
+    expect(clicked).toHaveBeenCalledTimes(1);
+  });
+
+  // The classic list must keep its own strategy: both surfaces answer to /jobs paths.
+  it("leaves the classic search list to the layout-A strategy", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-card.html");
+
+    const cards = linkedinAdapter.findCards(document);
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.dataset.jhId).toBe("LI-100001");
+    expect(cards[0]!.tagName).toBe("LI");
+  });
+});
+
+// Where the card's action bar mounts. Layout C's card element is itself a flex row,
+// so a bar appended to it lands beside the content rather than under it and takes
+// half the card's width from the title and company.
+describe("linkedin adapter — card bar anchor", () => {
+  it("resolves a search-results card's bar anchor inside the card", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-card.html");
+    const [card] = linkedinAdapter.findCards(document);
+
+    const body = card!.querySelector(linkedinAdapter.cardBodySelector!);
+
+    expect(body).not.toBeNull();
+    expect(body).not.toBe(card);
+    expect(body!.parentElement).toBe(card);
+  });
+
+  // The two alternatives in the selector must stay mutually exclusive: only layout
+  // C's cards carry a componentkey, so the classic card keeps its own resolution.
+  it("does not reach into a classic search card", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-card.html");
+    const [card] = linkedinAdapter.findCards(document);
+
+    expect(card!.querySelector(`[componentkey^="job-card-component-ref-"] > div`)).toBeNull();
+  });
+});
+
+// Classic detail bars must support concurrent top-card class variants.
+describe("linkedin adapter — side-panel detail bar", () => {
+  it("anchors the detail bar in the top card", () => {
+    document.body.innerHTML = loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/search/?currentJobId=100001");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    const bar = document.querySelector(".jh-detail-actions");
+    expect(bar).not.toBeNull();
+    expect(bar!.closest(".job-details-jobs-unified-top-card__container--two-pane")).not.toBeNull();
+    expect((bar!.querySelector(".jh-btn-hide") as HTMLButtonElement).title).toBe("Hide (Alt+H)");
+  });
+
+  // The side panel renders cards and detail in one document, so a page-wide query
+  // for a card's control must never win the anchor.
+  it("does not anchor the detail bar to a list card", () => {
+    document.body.innerHTML =
+      loadFixture("linkedin-search-card.html") + loadFixture("linkedin-detail.html");
+    window.history.pushState({}, "", "/jobs/search/?currentJobId=100001");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    const bar = document.querySelector(".jh-detail-actions");
+    expect(bar).not.toBeNull();
+    expect(bar!.closest("li[data-occludable-job-id]")).toBeNull();
+  });
+});
+
+describe("linkedin adapter — detail shortcut", () => {
+  function setup(jobId: string, initialStatus = "seen") {
+    document.body.innerHTML = `<div class="jh-detail-actions" data-jh-job-id="LI-${jobId}"></div>`;
+    window.history.pushState({}, "", `/jobs/view/${jobId}/`);
+    const chrome = installFakeChrome();
+    let status = initialStatus;
+    let hidden = false;
+    chrome.onMessage.addListener((message: unknown) => {
+      const request = message as {
+        type?: string;
+        platform_ids?: string[];
+        payload?: { events?: Array<{ event: string }> };
+      };
+      if (request.type === "state-batch") {
+        return {
+          ok: true,
+          result: request.platform_ids?.map((platform_id) => ({
+            platform_id,
+            status,
+            hidden,
+            starred: false,
+          })),
+        };
+      }
+      if (request.type !== "event") return undefined;
+      const event = request.payload?.events?.[0]?.event;
+      if (event === "to_apply") status = "to_apply";
+      if (event === "hidden") hidden = true;
+      if (event === "unhidden") hidden = false;
+      return {
+        ok: true,
+        result: { status, hidden, starred: false },
+      };
+    });
+    return chrome;
+  }
+
+  function altH(overrides: KeyboardEventInit = {}) {
+    return new KeyboardEvent("keydown", {
+      key: "h",
+      altKey: true,
+      cancelable: true,
+      ...overrides,
+    });
+  }
+
+  function altT(overrides: KeyboardEventInit = {}) {
+    return altH({ key: "t", ...overrides });
+  }
+
+  it("hides and unhides the current detail job with Alt+H", async () => {
+    const { sendMessage } = setup("990001");
+    const hide = altH();
+
+    linkedinAdapter.onKeyDown!(hide);
+
+    expect(hide.defaultPrevented).toBe(true);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "event",
+        payload: expect.objectContaining({ events: [{ event: "hidden" }] }),
+      }),
+      expect.any(Function),
+    );
+    await vi.waitFor(() => expect(stateOf("LI-990001").hidden).toBe(true));
+
+    sendMessage.mockClear();
+    linkedinAdapter.onKeyDown!(altH());
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "event",
+        payload: expect.objectContaining({ events: [{ event: "unhidden" }] }),
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it("does not claim Alt+H while the user is editing", () => {
+    const { sendMessage } = setup("990002");
+    const input = document.body.appendChild(document.createElement("input"));
+    const event = altH();
+    Object.defineProperty(event, "composedPath", { value: () => [input, document.body] });
+
+    linkedinAdapter.onKeyDown!(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("moves the current detail job to To apply with Alt+T", async () => {
+    const { sendMessage } = setup("990004");
+    const move = altT();
+
+    linkedinAdapter.onKeyDown!(move);
+
+    expect(move.defaultPrevented).toBe(true);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "event",
+        payload: expect.objectContaining({ events: [{ event: "to_apply", meta: undefined }] }),
+      }),
+      expect.any(Function),
+    );
+    await vi.waitFor(() => expect(stateOf("LI-990004").status).toBe("to_apply"));
+  });
+
+  it("does not claim Alt+T when To apply is not a forward move", async () => {
+    const { sendMessage } = setup("990005", "applied");
+    await refreshStates(["LI-990005"]);
+    sendMessage.mockClear();
+    const move = altT();
+
+    linkedinAdapter.onKeyDown!(move);
+
+    expect(move.defaultPrevented).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does nothing without the matching current detail bar", () => {
+    const { sendMessage } = setup("990003");
+    document.querySelector(".jh-detail-actions")?.remove();
+    const event = altH();
+
+    linkedinAdapter.onKeyDown!(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+// Cards and recommendation rails must never supply the open job's metadata.
+describe("linkedin adapter — posting age scope", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(CAPTURED_AT));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("ignores a list card's age when dating the open job", () => {
+    document.body.innerHTML =
+      loadFixture("linkedin-search-results-card.html") +
+      loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    const { sendMessage } = installFakeChrome();
+
+    // The cards carry their own, older ages, ahead of the detail pane in the document.
+    expect(document.body.textContent).toContain("2 weeks ago");
+    expect(document.body.textContent).toContain("3 months ago");
+
+    linkedinAdapter.capture!();
+
+    const [message] = sendMessage.mock.calls[0]!;
+    expect((message as { payload: { meta: Record<string, unknown> } }).payload.meta).toMatchObject({
+      posted_age: "22 hours ago",
+    });
+  });
+
+  it("ignores recommendation ages when the current job has no age", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    [...document.querySelectorAll("span")]
+      .find((el) => el.textContent === "22 hours ago")!
+      .remove();
+    document.body.insertAdjacentHTML(
+      "afterbegin",
+      "<div><span>Other City · Reposted 2 weeks ago</span></div>",
+    );
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      "<div><span>Other Place · 1 day ago</span></div>",
+    );
+    const { sendMessage } = installFakeChrome();
+
+    linkedinAdapter.capture!();
+
+    expect(sendMessage.mock.calls[0]![0]).toMatchObject({
+      payload: { meta: { posted_age: null, posted_at: null, location: "Exampleland" } },
+    });
+  });
+});
+
+// The top card provides no inset of its own — its content column does — so a head
+// appended beside that column sits flush against the pane's left edge while every
+// LinkedIn row is indented.
+describe("linkedin adapter — detail head placement", () => {
+  it("puts the head in the column that aligns the title, not beside it", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    const head = document.querySelector(".jh-detail-head")!;
+    const titleLink = document.querySelector('a[href*="/jobs/view/100005/"]')!;
+    // Same column as the rows LinkedIn aligns, rather than a sibling of the column.
+    expect(head.parentElement).toBe(titleLink.closest("div")!.parentElement);
+    expect(head.parentElement).not.toBe(document.querySelector('[data-testid="lazy-column"]'));
+  });
+
+  // No inline spacing is applied: alignment must come from the container, because
+  // the rows that carry the inset are display:contents and expose no usable margin.
+  it("adds no inline margin of its own", () => {
+    document.body.innerHTML = loadFixture("linkedin-search-results-detail.html");
+    document.title = "Example Senior Backend Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", "/jobs/search-results/?currentJobId=100005");
+    installFakeChrome();
+
+    linkedinAdapter.scanDetail!();
+
+    const head = document.querySelector(".jh-detail-head") as HTMLElement;
+    expect(head.style.marginLeft).toBe("");
+    expect(head.style.marginRight).toBe("");
+  });
+});
+
+describe("linkedin adapter — application availability", () => {
+  const gray = "Not currently accepting applications";
+  const red = "No longer accepting applications";
+  const layouts = [
+    [
+      "classic",
+      "linkedin-detail.html",
+      "/jobs/view/100001/",
+      ".job-details-jobs-unified-top-card__container--two-pane",
+    ],
+    ["standalone", "linkedin-detail-sdui.html", "/jobs/view/100004/", "body > div:first-child"],
+    [
+      "search",
+      "linkedin-search-results-detail.html",
+      "/jobs/search-results/?currentJobId=100005",
+      '[data-testid="lazy-column"] > div:first-child',
+    ],
+  ];
+
+  let nextId = 200000;
+  function setup(fixture: string, url: string, selector: string) {
+    const baseId = url.match(/(?:view\/|currentJobId=)(\d+)/)![1]!;
+    const id = String(nextId++);
+    document.body.innerHTML = loadFixture(fixture).replaceAll(baseId, id);
+    url = url.replace(baseId, id);
+    document.title = "Example Engineer | Example Labs | LinkedIn";
+    window.history.pushState({}, "", url);
+    const chrome = installFakeChrome();
+    chrome.onMessage.addListener((message: unknown) => {
+      const request = message as BridgeRequest;
+      if (request.type === "listing")
+        return {
+          ok: true,
+          result: { job_id: "job-availability", listing_id: "listing-availability" },
+        };
+      return undefined;
+    });
+    return { ...chrome, header: document.querySelector(selector)! };
+  }
+
+  it.each(layouts)(
+    "captures the gray notice without closing or dismissing the %s view",
+    async (_layout, fixture, url, selector) => {
+      const { header, sendMessage } = setup(fixture, url, selector);
+      const notice = document.createElement("p");
+      notice.textContent = gray;
+      header.append(notice);
+      linkedinAdapter.scanDetail!();
+      linkedinAdapter.capture!();
+      await vi.waitFor(() =>
+        expect(
+          sendMessage.mock.calls.some(([value]) => (value as BridgeRequest).type === "listing"),
+        ).toBe(true),
+      );
+      const captures = sendMessage.mock.calls
+        .map(([value]) => value as BridgeRequest)
+        .filter((value) => value.type === "listing");
+      expect(captures).toHaveLength(1);
+      expect(captures[0]).toMatchObject({
+        payload: {
+          availability: "unavailable",
+          availability_message: gray,
+          availability_observed_at: expect.any(String),
+        },
+      });
+      expect(captures[0]!.payload).not.toHaveProperty("closed_at");
+      expect(
+        sendMessage.mock.calls.some(
+          ([value]) => (value as BridgeRequest).type === "close-bulk-job-tab",
+        ),
+      ).toBe(false);
+      expect(document.querySelector(".jh-banner-alert")).toBeNull();
+      expect(document.querySelector(".jh-detail-head")?.textContent).toContain(
+        "Applications unavailable",
+      );
+    },
+  );
+
+  it("captures resumed applications in the same document and clears the notice", async () => {
+    const { header, sendMessage } = setup(layouts[1]![1]!, layouts[1]![2]!, layouts[1]![3]!);
+    const notice = document.createElement("p");
+    notice.textContent = gray;
+    header.append(notice);
+    linkedinAdapter.capture!();
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+    notice.remove();
+    linkedinAdapter.capture!();
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
+    expect(sendMessage.mock.calls[1]![0]).toMatchObject({
+      payload: { availability: "open", availability_message: null },
+    });
+    linkedinAdapter.capture!();
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["description", "recommendation"])("ignores unavailable notices in a %s", (where) => {
+    const { sendMessage } = setup(layouts[1]![1]!, layouts[1]![2]!, layouts[1]![3]!);
+    const container =
+      where === "description"
+        ? document.querySelector('[componentkey^="JobDetails_AboutTheJob"]')!
+        : document.body.appendChild(document.createElement("aside"));
+    container.insertAdjacentHTML("beforeend", `<p>${gray}</p><p>${red}</p>`);
+    linkedinAdapter.capture!();
+    expect(sendMessage.mock.calls[0]![0]).toMatchObject({ payload: { availability: "open" } });
+  });
+
+  it.each(["missing", "disabled", "hidden"])(
+    "does not infer open availability from a %s Apply control",
+    (kind) => {
+      const { header, sendMessage } = setup(layouts[1]![1]!, layouts[1]![2]!, layouts[1]![3]!);
+      const control = header.querySelector('[aria-label*="Easy Apply"]')!;
+      if (kind === "missing") control.remove();
+      if (kind === "disabled") control.setAttribute("aria-disabled", "true");
+      if (kind === "hidden") header.setAttribute("hidden", "");
+      linkedinAdapter.capture!();
+      expect((sendMessage.mock.calls[0]![0] as { payload: object }).payload).not.toHaveProperty(
+        "availability",
+      );
+    },
+  );
+  it("ignores a hidden notice and captures the visible Apply control", () => {
+    const { header, sendMessage } = setup(layouts[1]![1]!, layouts[1]![2]!, layouts[1]![3]!);
+    header.insertAdjacentHTML("beforeend", `<div hidden><p>${gray}</p><p>${red}</p></div>`);
+    linkedinAdapter.capture!();
+    expect(sendMessage.mock.calls[0]![0]).toMatchObject({ payload: { availability: "open" } });
+  });
+
+  it("ignores a stale detail pane after the URL moves to another job", () => {
+    const { header, sendMessage } = setup(layouts[1]![1]!, layouts[1]![2]!, layouts[1]![3]!);
+    header.insertAdjacentHTML("beforeend", `<p>${red}</p>`);
+    window.history.pushState({}, "", "/jobs/view/300000/");
+    linkedinAdapter.scanDetail!();
+    linkedinAdapter.capture!();
+    const captures = sendMessage.mock.calls
+      .map(([value]) => value as BridgeRequest)
+      .filter((value) => value.type === "listing");
+    expect(captures).toHaveLength(1);
+    expect(captures[0]!.payload).not.toHaveProperty("availability");
+    expect(captures[0]!.payload).not.toHaveProperty("closed_at");
+  });
+});

@@ -1,19 +1,35 @@
+# JavaScript and build output
+node_modules/
+dist/
+BUILD_INFO.json
+
+# Local environment files
+*.local
 .env
 .env.*
 !.env.example
+
+# Python / uv
 .venv/
-venv/
-*.egg-info/
 __pycache__/
-*.py[cod]
+*.pyc
 .pytest_cache/
-.ruff_cache/
 .mypy_cache/
-.coverage.*
-htmlcov/
-node_modules/
-dist/
-coverage/
-.coverage
-celerybeat-schedule*
-*.db
+.ruff_cache/
+
+# Local API data
+apps/api/**/*.db
+apps/api/**/*.db-*
+apps/api/**/*.db.sync*
+apps/api/**/backups/
+apps/api/.job-tracker-state/
+apps/api/script-output/
+
+# Private overlays — absent from the public build (see docs/PRIVATE.md)
+apps/extension/src/adapters/local/
+apps/web/src/platforms/local/
+apps/api/scripts/local/
+
+# Plans/ledgers hold internal context. Existing tracked files remain tracked;
+# this rule prevents a fresh export from staging them.
+docs/plans/

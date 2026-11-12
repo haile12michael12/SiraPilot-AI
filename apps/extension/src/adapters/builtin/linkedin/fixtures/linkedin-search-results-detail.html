@@ -1,0 +1,52 @@
+<!-- Layout C detail shares its document with cards, each with an overflow button.
+     LazyColumn has a stable data-testid but rotating keys/classes. Use its boundary
+     and the detail overflow button to find the top card; identity comes from the test title.
+     Preserve nesting: mount the head inside the content column because the top card
+     has no inset and display:contents rows expose no margin to copy. -->
+
+<!-- A stripped card, here only to keep the detail anchor honest: cards and detail
+     share this document and every card has its own "More options", which a page-wide
+     query would hit first. -->
+<div role="button" tabindex="0" componentkey="job-card-component-ref-100002">
+  <button type="button" aria-label="More options" aria-expanded="false"></button>
+</div>
+
+<div data-testid="lazy-column" data-component-type="LazyColumn" componentkey="00000000-0000-0000-0000-000000000000">
+  <!-- Top card. Its own children are NOT inset. -->
+  <div class="_51373152 bfc7dd66 _391bbe46">
+    <!-- The content column: everything in here shares one alignment. -->
+    <div class="_51373152 _6c1ad861 _26eb8f69">
+      <!-- Company row, which also carries the pane's own overflow button. -->
+      <div class="_6c1ad861 c9d5d8ed _5658ec6e">
+        <div class="_13225c48" data-display-contents="true" style="display: contents">
+          <a href="https://www.linkedin.com/company/example-labs/life/">Example Labs</a>
+        </div>
+        <button type="button" aria-label="More options" aria-expanded="false"></button>
+      </div>
+      <div class="_13225c48" data-display-contents="true" style="display: contents">
+        <p><a href="https://www.linkedin.com/jobs/view/100005/">Example Senior Backend Engineer</a></p>
+      </div>
+      <p>
+        <span>Exampleland</span><span> · </span><span>22 hours ago</span><span> · </span><span>76 applicants</span>
+      </p>
+    </div>
+    <div class="_6c1ad861 acb01448">
+      <a aria-disabled="false" href="#">On-site</a>
+      <a aria-disabled="false" href="#">Full-time</a>
+    </div>
+    <div class="_51373152 _5658ec6e">
+      <a aria-disabled="false" aria-label="Easy Apply to this job" href="#">Easy Apply</a>
+      <button type="button" aria-label="Save the job">Save</button>
+    </div>
+  </div>
+
+  <!-- The description, in the same AboutTheJob container layout B uses. This pane
+       serves an empty skeleton until it fills; linkedin-search-results-detail-loading.html
+       pins that state. -->
+  <div class="_2bedb7c3 _40124eee" componentkey="JobDetails_AboutTheJob_100005">
+    <div componentkey="JobDetails_AboutTheJob_100005">
+      <p>We build developer tools used by thousands of engineers.</p>
+      <p>Requirements: 5+ years of experience with TypeScript and distributed systems.</p>
+    </div>
+  </div>
+</div>

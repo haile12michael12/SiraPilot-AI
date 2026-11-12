@@ -1,0 +1,33 @@
+<!-- Classic detail: the top card sits outside #job-details; posting age is relative.
+     Both top-card class variants retain title/company/button descendants. Anchor to
+     the button cluster because overflow has visible text but no aria-label.
+     Age remains nested two spans below its separator row. -->
+<div class="relative job-details-jobs-unified-top-card__container--two-pane">
+  <h1 class="job-details-jobs-unified-top-card__job-title">Example Backend Engineer</h1>
+  <div class="job-details-jobs-unified-top-card__company-name">
+    <a href="https://www.linkedin.com/company/example-labs/">Example Labs</a>
+  </div>
+  <div class="job-details-jobs-unified-top-card__top-buttons">
+    <button aria-label="Share">Share</button>
+    <button class="artdeco-button artdeco-button--tertiary">Show more options</button>
+  </div>
+  <div class="t-black--light mt2 job-details-jobs-unified-top-card__tertiary-description-container">
+    <span
+      ><span class="tvm__text tvm__text--low-emphasis">Example City, Exampleland</span
+      ><span class="tvm__text tvm__text--low-emphasis"
+        ><span class="white-space-pre"> </span>·<span class="white-space-pre"> </span></span
+      ><span class="tvm__text tvm__text--low-emphasis"><span>17 days ago</span></span
+      ><span class="tvm__text tvm__text--low-emphasis"
+        ><span class="white-space-pre"> </span>·<span class="white-space-pre"> </span></span
+      ><span class="tvm__text tvm__text--low-emphasis">25 people clicked apply</span></span
+    >
+  </div>
+  <button id="jobs-apply-button-id" aria-label="Easy Apply to Example Labs">Easy Apply</button>
+</div>
+<div class="job-details-fit-level-preferences">
+  <button>Remote</button>
+  <button>Full-time</button>
+</div>
+<div
+  id="job-details"
+><p>We build developer tools used by thousands of engineers.</p><p>Requirements: 5+ years of experience with TypeScript and distributed systems.</p></div>

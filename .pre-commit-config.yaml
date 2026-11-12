@@ -1,0 +1,136 @@
+# Use workspace-pinned tools; no separate hook environments.
+# Fix only at pre-commit, before the commit is assembled; pre-push reports failures.
+# Explicit stages prevent fixers from modifying the working tree during a push.
+# vp run caches report-only tasks; direct fixers must execute on every change.
+# Install both hook stages: uv run --directory apps/api pre-commit install
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: local
+    hooks:
+      # Run fixers directly at pre-commit; cached replays cannot repair new changes.
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --directory apps/api ruff format
+        language: system
+        stages: [pre-commit]
+        types_or: [python, pyi]
+        pass_filenames: false
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --directory apps/api ruff check --fix
+        language: system
+        stages: [pre-commit]
+        types_or: [python, pyi]
+        pass_filenames: false
+
+      - id: vp-fmt
+        name: vp fmt (oxfmt)
+        entry: ./node_modules/.bin/vp fmt
+        language: system
+        stages: [pre-commit]
+        files: ^(apps/(extension|web)|packages)/
+        pass_filenames: false
+
+      # Markdown only; .prettierignore keeps it off docs/plans and the overlay.
+      - id: prettier-md
+        name: prettier (markdown)
+        entry: ./node_modules/.bin/prettier --write
+        language: system
+        stages: [pre-commit]
+        types: [markdown]
+
+      # Report-only lint/typecheck run at both stages.
+      - id: vp-lint
+        name: vp lint (cached)
+        entry: ./node_modules/.bin/vp run lint
+        language: system
+        stages: [pre-commit, pre-push]
+        files: ^(apps/(extension|web)|packages)/
+        pass_filenames: false
+
+      - id: vp-typecheck
+        name: vp typecheck (cached)
+        entry: ./node_modules/.bin/vp run typecheck
+        language: system
+        stages: [pre-commit, pre-push]
+        files: ^(apps/(extension|web)|packages)/
+        pass_filenames: false
+
+      # Run the whole matrix regardless of changed paths; cross-language contracts can break
+      # from either stack. Task caching avoids repeating unaffected work.
+      - id: fmt-check
+        name: oxfmt --check (cached)
+        entry: ./node_modules/.bin/vp run fmt:check
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      - id: vp-test
+        name: vp test (cached)
+        entry: ./node_modules/.bin/vp run test
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      - id: vp-build
+        name: vp build (cached)
+        entry: ./node_modules/.bin/vp run build
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      - id: py-format
+        name: ruff format --check (cached)
+        entry: ./node_modules/.bin/vp run py:format
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      - id: py-lint
+        name: ruff check (cached)
+        entry: ./node_modules/.bin/vp run py:lint
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      - id: py-typecheck
+        name: mypy (strict, cached)
+        entry: ./node_modules/.bin/vp run py:typecheck
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      - id: py-test
+        name: pytest (cached)
+        entry: ./node_modules/.bin/vp run py:test
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      # Check generated API drift locally. Manifest-host checks require a public-only build
+      # and remain CI-only; see apps/extension/scripts/assert-manifest-hosts.mjs.
+      - id: api-drift
+        name: API types drift (cached)
+        entry: ./node_modules/.bin/vp run api:check
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false
+
+      # Run after the extension build; tag checks matter only when tags are fetched.
+      - id: version-consistency
+        name: product version consistency
+        entry: bash scripts/check-version.sh
+        language: system
+        stages: [pre-push]
+        always_run: true
+        pass_filenames: false

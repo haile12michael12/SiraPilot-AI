@@ -1,0 +1,671 @@
+/* ── Job card states ───────────────────────────────────────────── */
+[data-jh-id].jh-removed {
+  display: none;
+}
+[data-jh-id].jh-hidden {
+  opacity: 0.15;
+  filter: grayscale(1);
+  transition: opacity 0.2s;
+}
+[data-jh-id].jh-hidden:hover {
+  opacity: 0.4;
+}
+[data-jh-id].jh-red {
+  outline: 2px solid #e53e3e;
+  border-radius: 6px;
+}
+[data-jh-id].jh-interested {
+  outline: 2px solid #1a7f5a;
+  border-radius: 6px;
+}
+
+/* Easy Apply field markers remain light-DOM so they sit with their question. The
+   panel itself uses a shadow root and carries its own isolated styles. */
+.jh-ff-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 0 0;
+  border: 1px solid #8c9bab;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #f3f6f8;
+  color: #38434f;
+  font:
+    600 12px/1.5 system-ui,
+    sans-serif;
+}
+.jh-ff-marker[data-state="filled"],
+.jh-ff-marker[data-state="already"],
+.jh-ff-marker[data-state="remembered"] {
+  border-color: #4f8f70;
+  background: #edf7f1;
+  color: #24583e;
+}
+.jh-ff-marker[data-state="attention"],
+.jh-ff-marker[data-state="confirmation"],
+.jh-ff-marker[data-state="differs"],
+.jh-ff-marker[data-state="failed"],
+.jh-ff-marker[data-state="error"] {
+  border-color: #9b7229;
+  background: #fff8e6;
+  color: #694b18;
+}
+.jh-ff-marker:focus-visible {
+  outline: 2px solid #0a66c2;
+  outline-offset: 2px;
+}
+.jh-ff-marker__symbol {
+  font-weight: 800;
+}
+/* Resolved (applied-or-beyond + terminals): decided, so muted while browsing —
+   but a lighter dim than a manual hide, and never removed (unless remove mode). */
+[data-jh-id].jh-resolved {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+  transition: opacity 0.2s;
+}
+[data-jh-id].jh-resolved:hover {
+  opacity: 0.75;
+}
+
+/* ── Description flag banner ───────────────────────────────────── */
+/* A ⚠ icon beside a body column: a chip row (short context-free flags) then one
+   line per keyword finding, each showing the matched word in its JD context. */
+/* The head stacks the optional warning banner above the independent copy button. */
+.jh-detail-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 6px 0;
+}
+.jh-detail-head .jh-detail-banner {
+  margin: 0; /* the head owns the outer spacing; the banner just stacks inside it */
+}
+
+/* Up to three stacked boxes, quietest first. */
+.jh-detail-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 680px;
+  font-size: 12px;
+  font-weight: 500;
+  margin: 6px 0;
+  color-scheme: light; /* pin readable text on a host dark theme, like the bars */
+}
+.jh-banner-stats,
+.jh-banner-findings,
+.jh-banner-alert {
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+/* Routine facts, on every job. */
+.jh-banner-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  background: #f3f5f7;
+  color: #33404d;
+  border-color: #dce0e4;
+}
+/* Yellow distinguishes requested keyword findings from red alerts. */
+.jh-banner-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  background: #fff3cd;
+  color: #664d03;
+  border-color: #e6a817;
+}
+/* Same red as the card-level .jh-red outline. */
+.jh-banner-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: #fde2e2;
+  color: #7a1f1f;
+  border-color: #e53e3e;
+}
+.jh-banner-icon {
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.jh-banner-chip {
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Tinted chips rank a fact that has a direction, on the .jh-match-pct ramp: green
+   fresh, amber cooling, grey gone quiet. An untinted chip inherits the strip's text. */
+.jh-banner-chip--good,
+.jh-banner-chip--warn,
+.jh-banner-chip--faded {
+  border-radius: 5px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+}
+.jh-banner-chip--good {
+  background: #e6f7f0;
+  color: #1a7f5a;
+  border-color: #b7e4cf;
+}
+.jh-banner-chip--warn {
+  background: #fff3cd;
+  color: #664d03;
+  border-color: #e6cf87;
+}
+.jh-banner-chip--faded {
+  background: #eef0f2;
+  color: #56687a;
+  border-color: #dce0e4;
+}
+/* One finding: a fixed-width label so the highlighted contexts line up under
+   each other, then the JD snippet. */
+.jh-banner-finding {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  line-height: 1.4;
+}
+.jh-banner-label {
+  flex-shrink: 0;
+  min-width: 64px;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+.jh-banner-ctx {
+  font-weight: 400;
+  opacity: 0.85;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jh-detail-banner mark {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: #e6a817;
+  color: #3d2c00;
+  font-weight: 700;
+}
+
+/* Pin the copy chip light for host-theme readability. Reveal its label only on
+   hover, focus, or feedback so it does not compete with job content. */
+.jh-banner-copy {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  border: 1px solid #e6a817;
+  border-radius: 4px;
+  padding: 2px 8px;
+  background: #fffdf5;
+  color: #664d03;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color-scheme: light; /* readable on a host dark theme even outside the banner */
+}
+.jh-banner-copy:hover {
+  background: #fff;
+}
+.jh-banner-copy svg {
+  width: 13px;
+  height: 13px;
+}
+/* Collapsed to zero width at rest (with its leading gap), expanded on interaction. */
+.jh-banner-copy-label {
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-width 0.15s ease,
+    margin-left 0.15s ease,
+    opacity 0.15s ease;
+}
+.jh-banner-copy:hover .jh-banner-copy-label,
+.jh-banner-copy:focus-visible .jh-banner-copy-label,
+.jh-banner-copy.jh-copy-flashing .jh-banner-copy-label {
+  max-width: 220px;
+  margin-left: 4px;
+  opacity: 1;
+}
+
+/* ── Action bar ────────────────────────────────────────────────── */
+/* Pin a light scheme and dark text: host dark themes otherwise make our
+   white buttons and native select text unreadable. */
+/* Separators (border-top here, the insight divider below) sit on the HOST page
+   background, not on our white chips — so a near-black tint vanishes on a dark
+   host theme. A mid-grey with alpha reads on both light and dark backgrounds. */
+.jh-actions {
+  display: flex;
+  gap: 6px;
+  margin: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(128, 128, 128, 0.4);
+  color-scheme: light;
+}
+
+.jh-btn {
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  background: #fff;
+  color: #1d2226;
+  font-family: inherit;
+  line-height: 1.4;
+  transition: background 0.15s;
+}
+.jh-btn:hover {
+  background: #f0f0f0;
+}
+
+/* Group insights and actions separately around status. Stretch their children
+   to match the height of status and overflow controls. */
+.jh-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.jh-group:empty {
+  display: none;
+} /* no phantom gap when a cluster is empty */
+/* Divider between the (non-empty) insight cluster and the status box. */
+.jh-group-insight:not(:empty) {
+  padding-right: 6px;
+  border-right: 1px solid rgba(128, 128, 128, 0.4);
+}
+/* A touch of extra air before the trailing ⋯. */
+.jh-actions > .jh-btn-more {
+  margin-left: 6px;
+}
+
+/* One bulk action per LinkedIn discovery email, separated from the provider's content
+   but using the same controls as each job card. */
+.jh-email-alert-actions {
+  justify-content: center;
+  margin: 0 0 12px;
+}
+.jh-btn-open-alert.jh-error {
+  border-color: #e53e3e;
+}
+
+.jh-btn-skip:hover {
+  background: #ffeaea;
+  border-color: #f99;
+}
+.jh-btn-hide:hover {
+  background: #ffeaea;
+  border-color: #f99;
+}
+.jh-btn-star:hover {
+  background: #fffbe6;
+  border-color: #f0c040;
+}
+
+/* Inline SVG icons (Lucide). `button.jh-btn` (not the <select> that also carries
+   .jh-btn) so the icons center next to any text; icons tint via currentColor and
+   are sized here rather than by the SVG's own width/height. */
+button.jh-btn,
+.jh-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+button.jh-btn svg,
+.jh-menu-item svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+/* Starred: fill the outline star and warm the whole glyph. */
+.jh-btn-star.jh-on {
+  border-color: #f0c040;
+  color: #e0a400;
+}
+.jh-btn-star.jh-on svg {
+  fill: currentColor;
+}
+
+/* Fixed width keeps the closed status control stable while its native option list
+   can accommodate every valid forward transition. */
+.jh-status {
+  width: 96px;
+  box-sizing: border-box;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-jh-id].jh-interested .jh-btn-star {
+  background: #e6f7f0;
+  border-color: #1a7f5a;
+}
+/* The resolved-state background is pinned inline (see pinSelectTheme) so it can't
+   be overridden by a host dark theme; only the border tint lives here. */
+[data-jh-id].jh-resolved .jh-status {
+  border-color: #1a7f5a;
+}
+
+/* Transient failure cue on the action bar (a write didn't reach the API) */
+.jh-actions.jh-error {
+  outline: 2px solid #e53e3e;
+  border-radius: 4px;
+  transition: outline 0.15s;
+}
+
+/* Steady offline state — distinct from the transient .jh-error flash: while the
+   background's health poll says the server is down, every bar dims and goes inert
+   instead of each click failing with its own flash. Auto-clears on reconnect. */
+.jh-actions.jh-offline {
+  opacity: 0.55;
+}
+.jh-actions.jh-offline .jh-btn,
+.jh-actions.jh-offline .jh-status {
+  pointer-events: none;
+}
+/* pointer-events sit on the controls, not the bar, so the ⚠ badge's title tooltip
+   still shows on hover. */
+.jh-offline-badge {
+  align-self: center;
+  cursor: help;
+  font-size: 13px;
+  line-height: 1;
+  color: #b7791f;
+}
+
+/* ── Detail page action bar (inline in job header, no border-top) ──── */
+/* The detail bar inherits theme guards from jh-actions; only layout differs. */
+.jh-detail-actions {
+  margin: 0 8px;
+  padding: 0;
+  border-top: none;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* Block placement (non-flex detail headers): own row + vertical
+   spacing, and neutralize the inline-flex-child tuning above so it doesn't
+   sit cramped/overlapping between the title and the labels row. */
+.jh-detail-actions--block {
+  margin: 12px 0;
+  align-self: auto;
+  width: fit-content;
+}
+
+/* ── Previous-applications badge (⟲N) ─────────────────────────────── */
+/* Informational blue ("you have history with this company"); clicking opens
+   the dashboard pre-filtered to the company. */
+.jh-btn-applied {
+  border-color: #0a66c2;
+  background: #eaf3fb;
+  color: #0a66c2;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.jh-btn-applied:hover {
+  background: #d7e9f7;
+}
+
+/* ── Detail-view block / unblock toggle ────────────────────────────────
+   Only on the detail bar (the list cards keep block in the ⋯ menu). Neutral
+   when the company is unblocked ("Block company"); when already blocked it
+   flips to a filled red state whose click unblocks. Hidden until a company
+   has resolved for the open posting. */
+.jh-btn-block[hidden] {
+  display: none;
+}
+.jh-btn-block:hover {
+  background: #ffeaea;
+  border-color: #f99;
+}
+.jh-btn-block.jh-on {
+  border-color: #e53e3e;
+  background: #fde2e2;
+  color: #7a1f1f;
+}
+.jh-btn-block.jh-on svg {
+  fill: currentColor;
+}
+.jh-btn-block.jh-on:hover {
+  background: #f9cccc;
+}
+
+/* ── Overflow menu (⋯) ─────────────────────────────────────────────── */
+.jh-btn-more {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.jh-menu {
+  position: fixed;
+  z-index: 2147483647; /* above the host's own overlays */
+  min-width: 200px;
+  background: #fff;
+  color: #1d2226;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 13px;
+  padding: 4px 0;
+  color-scheme: light;
+}
+
+.jh-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.jh-menu-item:hover:not(:disabled) {
+  background: #ffeaea;
+}
+.jh-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Repost / duplicate match badge + popover ──────────────────────── */
+/* The 🔁 badge leads the detail bar when the posting looks like a repost. */
+.jh-btn-match {
+  border-color: #e6a817;
+  background: #fff3cd;
+  color: #664d03;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.jh-btn-match:hover {
+  background: #ffe9a8;
+}
+
+.jh-match-popover {
+  position: fixed;
+  z-index: 2147483647; /* above LinkedIn's own overlays */
+  width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #fff;
+  color: #1d2226;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 13px;
+  padding: 4px 0;
+  /* Pin light controls so a host dark theme cannot produce white-on-white buttons. */
+  color-scheme: light;
+}
+
+.jh-match-head {
+  padding: 8px 12px 6px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #56687a;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Two stacked lines: [% + title/subtitle] then a right-aligned action row. Stacking
+   keeps the title full-width instead of letting the buttons crush it. */
+.jh-match-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+.jh-match-row:last-child {
+  border-bottom: none;
+}
+
+.jh-match-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Leading JD-overlap chip: a fixed-width badge so every row's title lines up, tinted
+   by strength (green strong / amber middling / grey weak / hollow unknown). */
+.jh-match-pct {
+  flex-shrink: 0;
+  min-width: 42px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+}
+.jh-match-pct--high {
+  background: #e6f7f0;
+  color: #1a7f5a;
+  border-color: #b7e4cf;
+}
+.jh-match-pct--mid {
+  background: #fff3cd;
+  color: #664d03;
+  border-color: #e6cf87;
+}
+.jh-match-pct--low {
+  background: #eef0f2;
+  color: #56687a;
+  border-color: #dce0e4;
+}
+.jh-match-pct--none {
+  background: none;
+  color: #99a4af;
+  border-color: #dce0e4;
+  font-weight: 600;
+}
+
+.jh-match-info {
+  min-width: 0;
+  flex: 1;
+}
+/* Primary line: the status (+ posting count) — what distinguishes one tracked
+   candidate from another when titles match. */
+.jh-match-primary {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jh-match-sub {
+  color: #56687a;
+  font-size: 11px;
+  margin-top: 2px;
+}
+.jh-match-sub:empty {
+  display: none;
+}
+.jh-match-title {
+  font-size: 12px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jh-match-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.jh-match-same {
+  color: #1a7f5a;
+}
+.jh-match-diff {
+  color: #664d03;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jh-match-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  /* Align the action row under the title, not the % chip (chip width + main gap). */
+  padding-left: 50px;
+}
+
+.jh-match-view {
+  color: #0a66c2;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 2px 4px;
+}
+.jh-match-view:hover {
+  text-decoration: underline;
+}
+/* jh-clicked dims links immediately while :visited supplies the browser cue. */
+.jh-match-view:visited,
+.jh-match-view.jh-clicked {
+  color: #8a63d2;
+}
+
+.jh-match-btn {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #fff;
+  /* Pin dark text on white chips against host dark themes; jh-match-link overrides it. */
+  color: #1d2226;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.jh-match-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.jh-match-link {
+  border-color: #1a7f5a;
+  color: #1a7f5a;
+}
+.jh-match-link:hover:not(:disabled) {
+  background: #e6f7f0;
+}
+.jh-match-not:hover:not(:disabled) {
+  background: #ffeaea;
+  border-color: #f99;
+}

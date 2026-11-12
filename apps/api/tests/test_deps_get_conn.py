@@ -1,0 +1,131 @@
+"""Request commit/rollback and sync-nudge contracts, driven directly through the dependency generator."""
+
+from __future__ import annotations
+
+import logging
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock
+
+import pytest
+
+from app.core.paths import resolve_paths
+from app.infra.database import Database
+from app.platform.dependencies import get_conn
+from app.platform.runtime import RuntimeResources
+
+
+def _request(method: str, path: str, db: Database, push_scheduler: Any = None) -> Any:
+    state = SimpleNamespace(
+        resources=RuntimeResources(
+            paths=resolve_paths(environ={}), db=db, push_scheduler=push_scheduler
+        )
+    )
+    return SimpleNamespace(
+        app=SimpleNamespace(state=state), method=method, url=SimpleNamespace(path=path)
+    )
+
+
+def test_commits_on_a_successful_request() -> None:
+    db = Database(conn=MagicMock())
+    gen = get_conn(_request("GET", "/api/jobs", db))
+
+    conn = next(gen)
+    assert conn is db.conn
+    with pytest.raises(StopIteration):
+        next(gen)  # the dependency's re-entry after the route handler returns
+
+    db.conn.commit.assert_called_once()
+    db.conn.rollback.assert_not_called()
+
+
+def test_rolls_back_and_reraises_on_a_failed_request() -> None:
+    db = Database(conn=MagicMock())
+    gen = get_conn(_request("POST", "/api/jobs", db))
+    next(gen)
+
+    with pytest.raises(ValueError, match="boom"):
+        gen.throw(ValueError("boom"))
+
+    db.conn.rollback.assert_called_once()
+    db.conn.commit.assert_not_called()
+
+
+def test_notifies_the_push_scheduler_after_a_non_get_commit() -> None:
+    db = Database(conn=MagicMock())
+    scheduler = MagicMock()
+    gen = get_conn(_request("POST", "/api/jobs", db, push_scheduler=scheduler))
+    next(gen)
+    with pytest.raises(StopIteration):
+        next(gen)
+
+    scheduler.notify_write.assert_called_once()
+
+
+def test_does_not_notify_the_push_scheduler_for_a_get() -> None:
+    db = Database(conn=MagicMock())
+    scheduler = MagicMock()
+    gen = get_conn(_request("GET", "/api/jobs", db, push_scheduler=scheduler))
+    next(gen)
+    with pytest.raises(StopIteration):
+        next(gen)
+
+    scheduler.notify_write.assert_not_called()
+
+
+def test_tolerates_no_push_scheduler_configured() -> None:
+    # Local and embedded-replica runtimes have no push scheduler.
+    db = Database(conn=MagicMock())
+    gen = get_conn(_request("POST", "/api/jobs", db))
+    next(gen)
+    with pytest.raises(StopIteration):
+        next(gen)
+
+    db.conn.commit.assert_called_once()
+
+
+def test_logs_a_commit_line_for_a_non_get(caplog: pytest.LogCaptureFixture) -> None:
+    db = Database(conn=MagicMock())
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        gen = get_conn(_request("PATCH", "/api/jobs/1", db))
+        next(gen)
+        with pytest.raises(StopIteration):
+            next(gen)
+
+    assert any("db commit" in r.message for r in caplog.records)
+
+
+def test_does_not_log_a_commit_line_for_a_get(caplog: pytest.LogCaptureFixture) -> None:
+    db = Database(conn=MagicMock())
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        gen = get_conn(_request("GET", "/api/jobs", db))
+        next(gen)
+        with pytest.raises(StopIteration):
+            next(gen)
+
+    assert not any("db commit" in r.message for r in caplog.records)
+
+
+def test_closing_an_unfinished_transaction_rolls_back_and_releases_lock() -> None:
+    db = Database(conn=MagicMock())
+    gen = get_conn(_request("POST", "/api/jobs", db))
+    next(gen)
+    assert db.lock.locked()
+    gen.close()
+    db.conn.rollback.assert_called_once()
+    db.conn.commit.assert_not_called()
+    assert not db.lock.locked()
+
+
+def test_write_preconditions_start_inside_transaction_before_any_query() -> None:
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    db = Database(conn=conn)
+    gen = get_conn(_request("POST", "/api/events", db))
+    assert next(gen) is conn
+    assert conn.in_transaction
+    gen.close()
+    assert not conn.in_transaction
+    assert not db.lock.locked()
+    conn.close()

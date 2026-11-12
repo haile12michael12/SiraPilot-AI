@@ -1,0 +1,58 @@
+name: job-tracker
+
+services:
+  job-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_REVISION: ${APP_REVISION:-dev}
+        APP_COMMIT_TIME: ${APP_COMMIT_TIME:-}
+        APP_BUILD_TIME: ${APP_BUILD_TIME:-1980-01-01T00:00:00Z}
+        APP_IDENTITY_ATTESTED: ${APP_IDENTITY_ATTESTED:-0}
+        SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH:-315532800}
+    image: ${JOB_TRACKER_IMAGE:-ghcr.io/muatasim-aswad/job-tracker:v2.0.0}
+    platform: linux/amd64
+    pull_policy: missing
+    init: true
+    user: "10001:10001"
+    ports:
+      - "127.0.0.1:${JOB_TRACKER_HOST_PORT:-3456}:3456"
+    environment:
+      JOB_TRACKER_PROFILE: packaged
+      JOB_TRACKER_APP_DIR: /app
+      JOB_TRACKER_DATA_DIR: /data
+      JOB_TRACKER_CONFIG_DIR: /config
+      JOB_TRACKER_STATE_DIR: /state
+      JOB_TRACKER_BACKUP_DIR: /backups
+      DB_PATH: /data/jobtracker.db
+      SCRIPTS_OUTPUT_DIR: /data/script-output
+      WEB_DIST_PATH: /app/apps/web/dist
+      PORT: "3456"
+      TRUSTED_HOSTS: '${TRUSTED_HOSTS:-["localhost","127.0.0.1"]}'
+      TURSO_DATABASE_URL: ${TURSO_DATABASE_URL:-}
+      TURSO_AUTH_TOKEN: ${TURSO_AUTH_TOKEN:-}
+    volumes:
+      - job-tracker-data:/data
+      - job-tracker-config:/config
+      - job-tracker-state:/state
+      - job-tracker-backups:/backups
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: 1g
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  job-tracker-data:
+  job-tracker-config:
+  job-tracker-state:
+  job-tracker-backups:

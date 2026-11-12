@@ -1,0 +1,366 @@
+# Job Tracker API
+
+Local FastAPI backend on **port 3456**, using SQLite by default with optional Turso synchronization. See [architecture](../../docs/ARCHITECTURE.md) for domain boundaries.
+
+## Run the API directly
+
+```bash
+uv run uvicorn app.main:app --host 127.0.0.1 --port 3456 --timeout-graceful-shutdown 15 --reload
+```
+
+Every feature route is mounted under `/api` (e.g. `POST /api/events`); OpenAPI docs stay unprefixed at <http://localhost:3456/docs>. The schema is created on startup (`jobtracker.db` in this directory by default).
+
+This direct command intentionally keeps cwd-relative `jobtracker.db`, `.env`, and `script-output` defaults. It still acquires `.job-tracker-state/server.lock` before opening the database, so a second direct or wrapped server cannot use the same profile.
+
+The delayed-import CLI is also available from this directory:
+
+```bash
+uv run python -m app.cli --profile direct start [--port PORT]
+uv run python -m app.cli --profile direct status
+uv run python -m app.cli --profile direct paths
+uv run python -m app.cli --profile direct version
+uv run python -m app.cli --profile direct build-info
+uv run python -m app.cli --profile direct doctor
+uv run python -m app.cli --profile direct backup /safe/path/job-tracker.sqlite
+uv run python -m app.cli --profile direct restore /safe/path/job-tracker.sqlite
+```
+
+`start` binds only to `127.0.0.1` and runs in the foreground. `status` never opens or mutates the database. `doctor` reports redacted path, version, mode, lock/health, permission, and safe integrity diagnostics. Backup, restore, and checkout adoption are offline-only and refuse while the selected server lock is held. Source launchers and packaged operation select their profile explicitly; see the authoritative [distribution and lifecycle contract](../../docs/DISTRIBUTION.md).
+
+## HTTP errors and logs
+
+Every HTTP failure uses this envelope, including request validation, routing, host/origin rejection, and unexpected failures:
+
+```json
+{
+  "error": {
+    "status": 409,
+    "code": "stale_revision",
+    "message": "stale_revision",
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "details": { "current": { "revision": 2 } }
+  }
+}
+```
+
+Use `code` for decisions and `message` as a safe display fallback. Conflict state is in `details.current`; only request-validation failures include `issues`, each with `path`, `code`, and a safe `message`, without input values or validator context. Error responses are `Cache-Control: no-store`. OpenAPI describes the envelope; regenerate shared types through the [development procedure](../../docs/DEVELOPMENT.md#source-and-generated-files). Version 2 replaces the former top-level `detail` and `current` fields; successful responses and database formats are unchanged.
+
+Every response includes `X-Request-ID`, exposed to allowed browser origins and repeated in error bodies. A valid caller-supplied UUID is normalized and reused; other values are replaced with a generated UUID. Use opaque UUIDs without private text. Request context is isolated across concurrent requests and worker threads.
+
+Startup configures JSON operational logs with timestamp, level, logger, message, and request ID (`null` outside a request). HTTP completion records add method, route template, status, code, and duration; transaction commits and build identity have their own events. The HTTP boundary handles and logs unexpected failures once. It replaces Uvicorn access logging to exclude query strings, resource IDs, headers, request bodies, and conflict details. Failure traces contain exception types and file/function/line locations without exception text, source lines, or frame values. The separate rate-limited thread diagnostic below retains its value-free stack dump.
+
+## Busy requests and shutdown
+
+Database requests wait in an asynchronous admission queue, preserving worker slots for the request holding the connection. Admission and connection-lock waits each expire after 30 seconds with `503`, `Retry-After: 1`, and `Cache-Control: no-store`. Retrying a rejected request is safe: it has not entered its transaction.
+
+`GET /health` and `GET /api/health` remain database-free reachability probes. `GET /health/ready` returns `200 {"status":"ready"}` only after runtime startup and a successful `SELECT 1` on the active connection under its shared lock. Startup, shutdown, query failures, and a one-second response deadline produce the standard `503 service_unavailable` envelope with `Retry-After: 1`. Readiness responses are `Cache-Control: no-store`. This public operational route retains host/origin checks and requires no API key; it exposes no database details. Local readiness does not require successful Turso synchronization and does not prove remote-primary write availability.
+
+At most one readiness query runs at a time, outside the request worker pool. A cancelled or timed-out caller leaves that query owning its connection lock until it finishes; later probes share the pending work instead of accumulating workers. A stalled native driver may outlive the response deadline, so the process manager's final stop deadline remains necessary. Cleanup disables readiness before stopping synchronization or closing the connection.
+
+A timed-out database wait logs its stage and dumps Python thread stacks to stderr at most once per minute. Dumps omit frame locals, SQL, credentials, and request bodies; under systemd they appear in the service journal. Capture those logs before restarting a future unresponsive server.
+
+The CLI and source launchers give Uvicorn 15 seconds to drain active requests before cancellation and application cleanup. Direct Uvicorn commands and custom service units must also set `--timeout-graceful-shutdown 15`; the scheduler's separate 10-second cleanup bound only applies once Uvicorn reaches application shutdown. A service manager still needs a final process-stop deadline for native driver stalls; a shutdown timeout does not terminate a running Python worker thread. Application cleanup leaves an owned connection and its profile lock for process exit instead of closing them under that worker.
+
+## Dashboard (web UI)
+
+The [dashboard](../web/README.md) uses relative `/api/...` paths in development and production.
+
+- **Dev** (hot reload): follow the [dashboard development procedure](../web/README.md#development). Vite proxies API requests to this server; keep the API running in a separate terminal.
+- **Prod / one process**: from the repository root, `pnpm run build:web` produces `apps/web/dist`, which FastAPI serves at the root on startup ([app composition](app/main.py) and [static serving](app/platform/http.py)) via `Settings.web_dist_path`. Then the whole thing is just <http://localhost:3456>. The mount is skipped when that directory is absent, so the API still runs without a build.
+
+Job-addressed reads and ordinary writes accept merged aliases, return canonical IDs, and set `Content-Location`. Deletion through an alias returns `409 job_merged` and requires repeating the request against the survivor. See [identity](../../docs/ARCHITECTURE.md#identity) for merge invariants.
+
+### Duplicate suggestions and merging
+
+`GET /api/jobs/{job_id}/matches` needs only a stored job ID. It uses the job's canonical title/company and compares all its listings with each candidate's listings, returning the existing `JobMatch[]` shape once per candidate. Missing title/company yields an empty list; an unknown ID returns `404`. Merged aliases resolve to the survivor, and `Content-Location` names `/api/jobs/{canonical_job_id}/matches`. Matching is read-only and retains false-match exclusions. The [architecture](../../docs/ARCHITECTURE.md#identity) defines candidate selection and evidence aggregation.
+
+`POST /api/jobs/{job_id}/link-job` accepts `{"other_job_id": "..."}` and merges both complete jobs using the existing survivor rules and conflict safeguards. Both IDs accept merged aliases. It returns `{"job_id": "<survivor>", "merged_from": ["<loser>"]}` with `Content-Location: /api/jobs/{survivor}`. Linking a job to itself, including a retry through an alias, is a no-op with an empty `merged_from`; an unknown ID returns `404`. The source path does not determine the survivor.
+
+The extension's existing `GET /api/jobs/matches` and `POST /api/listings/link-job` retain their listing-based inputs and responses. The endpoint and payload contract is available in OpenAPI.
+
+### Shared extension settings
+
+Startup seeds one settings row if absent: description highlights enabled with default words, no title rules, Easy Apply on, filtered jobs hidden, and diagnostics Never. The seed uses the existing migration ledger and preserves every existing row, including disabled highlights, empty keyword lists, and an empty highlight collection. Existing browser settings are ignored.
+
+`GET /api/settings` returns the stored `{revision, settings}`. `PATCH /api/settings` takes `{expected_revision, changes}` and merges supplied fields; a stale revision returns `409` with the current state. All settings responses and errors use `Cache-Control: no-store`.
+
+Settings contain `description_highlights`, `title_rules`, `easy_apply_enabled`, `hide_mode` (`dim`/`remove`), and `search_diagnostics` (`scope` and Unix-millisecond `expires_at`). Rules have a stable ID, enabled flag, condition (`contains`, `starts_with`, `not_contains`), alternative `terms`, and action (`outline_job_card`, `hide`, `star`, `skip`). Up to 100 rules and 200 keywords per list are accepted; keywords are trimmed and deduplicated. Lists require unique IDs. Explicit null settings and empty title-rule keyword lists are refused. A temporary diagnostics scope requires an expiry; disabled or expired capture makes search-log submissions a no-op. Settings are ordinary database data, included in backups and optional Turso synchronization.
+
+### Listing capture timestamps
+
+Listings in `GET /api/jobs/{job_id}` expose `captured_at` (first capture of any kind) and `last_detail_captured_at` (latest successful full-detail capture). `POST /api/listings` accepts `capture_kind: "detail" | "partial"`, defaulting to `partial`. Detail requests must supply a nonblank title and string `meta.description`; stored fields and `meta_patch` cannot satisfy that requirement. Each accepted detail capture advances `last_detail_captured_at`, including identical recaptures. Partial card captures, availability-only updates, manual edits, relinks, and merges preserve it.
+
+Both capture timestamps use server UTC time and are not caller-supplied fields. `updated_at` records broader listing changes, while `availability_observed_at` records availability evidence only. Uncaptured stubs have null capture timestamps. Existing listings retain their original `captured_at` and start with null `last_detail_captured_at` until a marked detail capture; older clients without the marker cannot advance it. The former `last_captured_at` database column is retained without further updates for additive migration compatibility; its values are neither exposed nor copied into the detail timestamp. The migration preserves existing data and is safe to rerun.
+
+### Primary listing
+
+`GET /api/jobs/{job_id}` returns `primary_listing_id`, referencing an entry in its existing `listings` array, or null when there are no listings. `GET /api/jobs` retains its compact `primary_listing` object (`listing_id`, `platform`, `platform_id`, `url`, `apply_url`), or null when there are no listings, so cards need no detail fetch. Both select the same listing using the [architecture ranking](../../docs/ARCHITECTURE.md#domain-model). The preference is computed on every read, including after captures, closure changes, deletions, relinks, and merges; it has no stored override or write endpoint.
+
+### Listing availability
+
+`POST /api/listings` accepts `availability` (`unknown`, `open`, `unavailable`, or `closed`), an optional `availability_message`, and an optional timezone-aware `availability_observed_at` (server time when omitted). `GET /api/jobs/{job_id}` returns these fields on each listing. Omitted or unknown observations preserve prior evidence; older observations are ignored. Notice and timestamp require an availability value. An open observation clears the listing closure; unavailable observations neither close a listing nor undo a recorded closure. Repeated closure captures preserve the first `closed_at` until reopening; explicit closure edits can still replace or clear it. `GET /api/jobs` includes `listing_availability` with unavailable/closed counts and dates plus `linkedin_open_count` for compact cards. Availability is independent of funnel progress; automatic reconciliation and manual-closure safeguards still apply.
+
+`GET /api/jobs` and `GET /api/jobs/{job_id}` also return top-level `availability`, calculated from the current listings on each read: `open` when any LinkedIn listing is confirmed open, otherwise `unavailable` when any listing is unavailable, otherwise `closed` when any listing is closed, otherwise `unknown`. Open listings on other platforms do not override warnings or establish job-level `open`. The field is read-only, is not a database column, and remains separate from funnel `status`; the dashboard displays this result without recalculating it. Existing listing counts remain available for filters.
+
+### Event write results
+
+Event batches and corrections return `event_ids`: the exact inserted IDs in submission order, obtained with `INSERT ... RETURNING`. No-op transitions, metadata-free flag changes, and duplicate flag metadata return no IDs; server-generated stub creation is excluded. IDs describe accepted history writes even when backdated events do not change the projected status. Revert returns the removed row in `deleted_event_ids`; invalidating an automatic closure keeps that row and returns no deleted IDs. Metadata/timestamp edits already return the exact updated event. These response fields accompany the canonical job ID and settled status/flags.
+
+### Conditional status writes
+
+`POST /api/events`, `POST /api/jobs/{job_id}/corrections`, and the optional body of `POST /api/jobs/{job_id}/status/revert` accept `expected_status`. The server compares it with the canonical job’s initial status inside the request transaction, before any events, flags, notes, or corrections. Mismatch returns `409 stale_status` with the current job ID, status, and flags; the whole request rolls back, including newly materialized stubs. A batch checks once before its first event. Omitted/null preconditions retain ordinary funnel behavior. An uncaptured listing materializes as `new` for this check.
+
+### Document metadata
+
+Documents accept and return a `meta` JSON object for document-specific context such as language, source, or an artifact reference. It defaults to `{}`. `PATCH /api/documents/{document_id}` replaces the entire object when supplied, clears it with `null` or `{}`, and preserves it when omitted. Metadata follows the document through relinks and merges and participates in keyed creation’s original request fingerprint. Existing documents read as `{}` after the additive migration. Values are retained private data alongside document content; workflow-wide analytics remain in the application-workflow resource.
+
+### Document creation retries
+
+`POST /api/jobs/{job_id}/documents` accepts an optional globally unique `creation_key` (1–200 characters, not whitespace-only). A new key returns `201`; an identical retry returns `200` with the same document ID and its current representation, even after edits or a merge. The key retains a hash of the original normalized creation payload; reuse with different fields or another canonical job returns `409 document_creation_key_conflict`. Omitting the key keeps ordinary independent creation. Keys and hashes are internal and removed when their document is deleted; retrying after deletion creates a new document. Document creation and key retention commit together.
+
+### Durable automation operations
+
+Document creation and `POST /api/events` accept an optional `operation_key` (1–200 characters, not whitespace-only). Keys are global within each resource family; use a fresh opaque key for each intended operation and retain its original request. A receipt commits in the same transaction as the write, including event batches that insert no rows. Failed requests consume no key. These receipts require opting in; earlier writes have no receipt.
+
+`GET /api/document-operations?operation_key=...` is read-only and returns `{operation_key, document_id, job_id, status, created_at}`. Status is `present` or `deleted`; the receipt contains no document content. An identical document POST retry returns `200` with the current document after edits, relinks, or merges. Deleted documents leave a tombstone: a matching retry returns `409 document_operation_deleted` with the receipt in `current`, never recreating the document. Different fields or another canonical owner return `409 document_operation_key_conflict`. Use either `operation_key` or the existing `creation_key`, not both. The latter keeps its deletion-releases-key behavior.
+
+`GET /api/event-operations?operation_key=...` returns `{operation_key, result, created_at}`, where `result` is the original `JobMutationState`, including exact event IDs and empty ID lists for no-ops. An identical POST retry returns that original result without rechecking current status or reapplying events. Any change to the normalized submitted request, including its address, explicit timestamp, or precondition, returns `409 event_operation_key_conflict` with the receipt in `current`. Omitted server timestamps are not part of the fingerprint. The result is historical: job IDs, state, and event IDs remain as originally returned after merges, relinks, edits, reverts, or deletion. Resolve the recorded job ID separately for current state; a later hard deletion can make it unresolvable.
+
+Missing lookup keys return `404`. Lookup successes and errors use `Cache-Control: no-store`. Receipts retain opaque keys, hashes, IDs, timestamps, and event result state through resource/job deletion, backups, and optional synchronization; they retain no copied document content or event metadata. Do not put private text or secrets in keys. See [privacy](../../PRIVACY.md#storage-and-diagnostics) for complete deletion.
+
+### Duplicate exclusions
+
+`POST /api/jobs/{job_id}/false-match` accepts `{ "other_job_id": "..." }` and mutually excludes two stored jobs from duplicate suggestions without a listing address. Both IDs resolve merged aliases; repeated exclusions and self-pairs are no-ops. Missing jobs return `404`. Success returns `204` with the canonical source job in `Content-Location`. The listing-addressed endpoint remains available for uncaptured postings. Merge and relink writes recheck both jobs’ exclusions inside their transaction, resolving excluded aliases, and return `409 false_match_conflict` without changing stored state when either side excludes the other. This also covers listing capture with an explicit different `job_id`; stale duplicate suggestions cannot bypass an exclusion. Same-job retries remain no-ops.
+
+### Application-workflow analytics
+
+Agents can use `GET` and `PUT /api/jobs/{job_id}/application-workflow` after submission has been explicitly confirmed by an effective `applied` or `corrected:applied` event. The singular record captures a typed preparation lane, submission actor and channel, narrative kinds and provenance, an optional measured human-time duration in integer seconds, and bounded opaque references to canonical agent artifacts or submission evidence. Use `unknown` when a required workflow fact is unknown, `null` only when human time was not measured, and an empty narrative list only when no narrative was used; do not infer or estimate missing facts.
+
+`PUT` replaces the complete workflow representation. On creation, `expected_revision` is null or omitted; a differing update must supply the current positive revision. Retrying an identical create or update is a no-op even if its precondition is now stale, while a differing stale write returns `409` with the current record. The response and `Content-Location` always use the canonical job ID, including when the request used a merged alias. There is no public delete endpoint.
+
+The record names the exact submitted event. Reverting that event, correcting the job back to a pre-application state, or hard-deleting the job removes the record. Relinks and merges move it with its event; an operation that would collapse two records returns `409 application_workflow_conflict`. Outcomes remain derived from the event history, and agent model, token, and cost details remain in the referenced canonical artifacts rather than being duplicated here. The API does not backfill earlier applications and no dashboard UI exists for this resource yet. All success and error responses for this path carry `Cache-Control: no-store`.
+
+### Needs attention and ghosting
+
+`GET /api/jobs` retains its read-only `attention` projection and exposes `application_stale_at` in job responses. Applied and in-process applications become stale after the saved inactivity threshold. Qualifying status events and notes reset the deadline; unrelated edits do not reset an event-based clock. Hidden jobs are omitted from the dashboard's stale-application count/filter. Settings stores stage thresholds; server configuration only supplies initial defaults. [Architecture](../../docs/ARCHITECTURE.md#application-staleness-and-notifications) owns lifecycle and scheduling rules.
+
+### Notifications
+
+| Route | Operation |
+| --- | --- |
+| `GET /notifications` | Paginated inbox/schedules; optional `job_id`, `state`, `kind` (`manual_reminder` or `application_stale`), `before`, and `limit` (1–100); returns `items`, `next_cursor`, and global `unread_count` |
+| `POST /notifications` | Create a manual reminder: `title`, optional `body`/`job_id`, timezone-aware `scheduled_at` |
+| `GET /notifications/{id}` | Read one notification |
+| `PATCH /notifications/{id}` | Edit a reminder with `expected_revision`; changing its schedule rearms it |
+| `POST /notifications/{id}/cancel` | Cancel a scheduled manual reminder with `expected_revision` |
+| `POST /notifications/{id}/ack` | Acknowledge client handling with the exact `published_at` |
+| `POST /notifications/{id}/read` | Mark the publication read globally, also acknowledging delivery |
+| `GET /notifications/push-key` | This installation’s VAPID public key, or null when disabled |
+| `POST /notifications/push-subscriptions` | Save a browser subscription with `endpoint` and `keys` (`p256dh`, `auth`) |
+| `DELETE /notifications/push-subscriptions` | Remove the subscription identified by the request body’s `endpoint` |
+| `GET /notifications/stream` | Live SSE `notification` publications and `sync` invalidations; heartbeat every 20 seconds |
+
+Paths above use `/api`. Responses/errors use `Cache-Control: no-store`. Automatic stale schedules are not directly editable. Stale revisions or obsolete publication acknowledgments return `409` without changing current state. Read/delivery timestamps are idempotent and do not advance reminder edit revisions. List pagination orders published items unread first, then newest first within unread/read groups; resolved items join the read group. Schedules sort by deadline (earliest first), with opaque IDs breaking ties.
+
+The worker runs inside the API every 60 seconds and once at startup. Keep exactly one `NOTIFICATION_SCHEDULER_ENABLED=true` instance per synchronized database; use `false` on other APIs. A stopped scheduler delays publication until its next startup. Native desktop alerts require browser permission and an open dashboard connected to the API; the dashboard otherwise uses in-app alerts. SSE reconnect recovers unacknowledged publications rather than replaying historical events. Client receipts contain only IDs/publication timestamps and prevent repeated presentation after a lost acknowledgment.
+
+Attention is read-only derived state, so no read or background process ever writes a status event: the user adds a note, moves or corrects the job, or confirms `Mark ghosted` in the drawer. A normal `ghosted` transition is accepted only from `applied` and `in_process`; anything else needs the correction control.
+
+### Form-fill knowledge
+
+`/api/form-fill` owns the typed, revision-checked knowledge used by supported application forms:
+
+- `POST /resolutions` observes exact Questions and returns one typed result per request field in request order.
+- `/answers` manages reusable verified values, fill policies, and revision-checked stable-key corrections. An Answer can be permanently deleted only while no Match points to it.
+- `/questions` manages review state and each Question's singleton Match, including complete one-to-one choice-option bindings. Saving a Match also applies the one non-conflicting current Capture when the resulting mapped action exactly equals the Answer's current action; a differing Capture remains provisional.
+- `/captures` stores provisional user-entered or explicitly remembered values for review and applies them through one of the explicit promotion/update workflows.
+- `/questions/{id}/capture-conflicts/resolve` selects a winner only when the Question revision and complete current Capture revision set still agree.
+
+`GET /questions?review_inbox=true` returns the union of actionable Questions and Questions with current Captures, once per Question. `include_matched=true` and `include_dismissed=true` independently extend that inbox with active Matches on open Questions and ignored Questions. These options require `review_inbox=true`; all filters participate in cursor identity. Summaries include section/help context and active-option, current-Capture, and ignored-Capture counts without Answer values. `review_state=ignored` and `GET /captures?status=ignored` provide dismissed-item history; Capture summaries include their Question label. Dismissed Capture values are cleared and cannot be reopened without a retained value.
+
+Radio and single-choice dropdown observations share normalizer-version-2 Question identity, stored as `control_kind=radio`. Requests retain their DOM kind and actions select request-local options. Existing version-1 choice knowledge requires explicit matching; see [form-fill identity](../../docs/ARCHITECTURE.md#form-fill-knowledge).
+
+Answer collections accept `sort=updated_at` (default, descending), `label` (case-insensitive ascending), or `mapping_count` (descending, counting all Matches). Question collections accept `sort=last_seen` (default), `seen_count`, or `prompt` (ascending normalized prompt). Stable ID tie-breakers keep pagination deterministic; cursors are bound to the filters and order. These collection reads never include retained values.
+
+`GET /captures`, Question-embedded Capture summaries, apply/conflict summaries, and all revision-conflict responses omit retained Capture values, including the `value` field. The dashboard presence poll uses this value-free collection. `GET /captures/{id}`, Capture creation/retry responses, and successful Capture review updates retain the detail value where available. Explicit resolution actions and Question-scoped Answer candidate previews also return private values for filling or review.
+
+`GET /questions/{id}/answer-candidates` returns active Answers compatible with that Question before pagination: scalar write compatibility (including integer constraints), equal active choice counts, and, for default suggestions, an unambiguous normalized label set or complete previously verified bindings. Default suggestions require meaningful prompt-word overlap with the Answer label/description or an active verified Question match; generic words such as years and experience do not qualify alone. Verified matches rank first, followed by label and description overlap, with normalized label and ID tie-breakers. Explicit `q` searches stable key, label, and description and relaxes relevance and option-label matching while retaining type, numeric, active-choice, and count checks for manual binding review. Candidate rows return ID, label, revision, and a readable value preview capped at 160 characters. Cursors bind the Question revision, search, and ranked Answer revisions; changed results require restarting pagination. Existing Match writes recheck revisions, scalar compatibility, and complete one-to-one bindings. The broader Match API continues to support extra Answer choices; candidate selection is deliberately stricter.
+
+Choice Questions, Answer vocabularies, and complete Match bindings share a 512-item bound. This covers legitimate long controls such as phone-country-code lists while keeping page-derived request and mutation payloads bounded.
+
+A Capture key identifies its original operation: an identical clear can be retried, while changing a value capture into a clear requires a new key even after its retained value has been removed. Legacy rows without an operation marker conservatively reject clear retries with the old key. Dashboard listing rollups project only text-valued `meta.apply_url`; other JSON types remain in listing metadata and produce a null application URL.
+
+Answer, Question, Match, and Capture writes use expected revisions; a stale write rolls back atomically and returns a current value-free summary. Question-context Answer creation derives compatible type and choice bindings from the Question and installs the Answer and Match in the same transaction. Without an eligible active Match, competing current Captures resolve to no action. Question detail and collection projections derive that conflict from the current set, and Capture apply refuses it until complete-set winner selection; reads preserve revisions. Superseding, clearing, ignoring, applying, or losing a conflict removes a Capture's retained value, while lifecycle events never copy Answer or Capture values. Every successful or error response under `/api/form-fill/` carries `Cache-Control: no-store`.
+
+## Test & type-check
+
+```bash
+uv run pytest          # in-memory sqlite, no network, no Turso
+uv run mypy            # strict
+```
+
+## Layout
+
+`main.create_app(settings, resources=...)` composes an isolated FastAPI application. `app.main:app` remains the normal Uvicorn entry point; the CLI establishes profile roots before importing application configuration or runtime code.
+
+```text
+app/
+├── main.py       HTTP composition and app factory
+├── cli.py        delayed-import lifecycle and maintenance commands
+├── config.py     typed Settings and profile-selected configuration loading
+├── modules/      business features and explicit application/query owners
+├── infra/        driver-neutral database access, migrations, transactions, sync
+├── platform/     HTTP mechanisms, request dependencies, runtime and logging
+├── shared/       pure enums, errors, identity, text, time, hashing and similarity
+├── maintenance/  offline snapshots, restore and checkout adoption
+└── core/         retained resource/CLI anchors and compatibility exports
+```
+
+### Features and application owners
+
+Routers translate HTTP; use-case functions and configured services enforce domain rules; repositories and feature operations own SQL. Shared resource access lives in `platform.dependencies`. Configured services keep providers and reusable `Annotated` aliases in the feature's `dependencies.py`; simple functions receive the connection directly.
+
+Application code receives ordinary typed arguments. Use `infra.database.hydrate_json` for driver-neutral row hydration.
+
+Application owners keep cross-feature coordination acyclic:
+
+| Owner | Responsibility |
+| --- | --- |
+| `modules/job_lifecycle/service.py` | Merge, relink, listing/job deletion, and listing writes that may relink. Feature-owned `operations.py` functions move history, document receipts, aliases and ownership; `form_fill/context.py` preserves Capture context. The caller owns the single transaction. |
+| `modules/job_activity/service.py` | Event batches, corrections, reverts and resulting workflow lifecycle. Event operation receipts remain with Events. |
+| `modules/job_queries/service.py` | Batched job summaries, details, states and duplicate evidence. `JobQueries` receives Settings explicitly; reads use batched queries. |
+| `modules/listings/service.py` | Natural-key materialization and evidence-preserving capture. Coordinated callers explicitly supply the relink operation. |
+
+Jobs owns identity edits and false-match exclusions; Events owns history moves and status restoration; Application workflows owns singular-record guards and eligibility cleanup. Routers/providers may compose these owners; lower features never import application owners. Their DTO/model imports express response composition rather than inward business calls.
+
+### Form-fill operations
+
+Form-fill exposes a connection-bound `FormFillService` API while focused module functions receive its repository explicitly:
+
+| Module | Responsibility |
+| --- | --- |
+| `resolution.py`, `actions.py` | Question observation, Match/Capture priority and request-local fill actions |
+| `queries.py`, `pagination.py` | Collections, details, compatible candidates and filter/order-bound cursor identities |
+| `answers.py` | Answer creation, revision-checked edits, vocabulary and deletion |
+| `mappings.py` | Question review, Match approval and atomic Question-context Answer creation |
+| `captures.py`, `capture_apply.py` | Capture lifecycle, conflict selection and named apply-action handlers |
+| `projections.py`, `validation.py`, `values.py`, `storage.py` | Value-free summaries, revision/type/binding checks, typed value adapters and savepoints |
+
+Capture apply checks revisions before its savepoint; one selected handler and Capture consumption share that savepoint inside the request transaction. Typed feature conflict codes subclass the public exception boundaries and map to HTTP messages, statuses and current-state payloads. Collection/conflict summaries remain value-free; explicit details may return retained private values as described in [form-fill knowledge](#form-fill-knowledge).
+
+### Runtime and transactions
+
+The lifespan opens resources through `platform.runtime.open_runtime`. Its typed `RuntimeResources` holds the resolved paths, database and optional scheduler; supply disposable paths when composing test applications. Startup acquires the profile lock before database open/pull/schema initialization. Cleanup stops sync before closing the connection and releases the profile lock last; active work retains the connection and lock for process exit. The [busy requests and shutdown](#busy-requests-and-shutdown) section owns deadlines and recovery.
+
+`platform.dependencies` admits requests asynchronously before a worker waits for the shared connection lock. `infra.transactions.transaction` is framework-independent: explicit BEGIN precedes write preconditions, related writes share one commit or rollback, and callbacks run only after successful commit. The HTTP callback preserves commit logging and scheduler notification. Background synchronization uses the same connection lock.
+
+### Compatibility and dependency checks
+
+`core.paths`, `core.lifecycle`, `core.build_info`, `core.version` and `core.diagnostics` own resource, delayed CLI and tooling contracts. `core/schema.sql` remains the baseline at its installed path; `infra.database` owns append-only migrations. Other `core` modules re-export supported settings, database, dependency and pure-helper symbols for existing tools and optional scrapers; new code imports their owning layer.
+
+Database startup deliberately calls the maintenance recovery hook before driver construction and loads preference defaults in its released seed migration. These are the two exact startup exceptions checked by `tests/test_layers.py`. Released migration keys and installed resource paths are compatibility boundaries.
+
+`tests/test_layers.py` enforces layer direction, pure shared dependencies, and HTTP ownership: FastAPI/Starlette and platform dependencies stay in routers/providers rather than application and repository logic. It also checks acyclic business dependencies, forbids lower features from importing application owners, and checks form-fill's module graph. HTTP composition and DTO imports are distinguished from business calls. Retained core implementation anchors are named explicitly. Repository-wide invariants remain in [architecture](../../docs/ARCHITECTURE.md).
+
+### Maintenance tools
+
+`scripts/` holds standalone maintenance tools (`merge_duplicates.py`, `audit_funnel.py`, `dump_openapi.py`, `scan_event_order.py`), typed and covered by the same ruff/mypy/pytest gate as `app/`. Run them as modules from here: `uv run python -m scripts.merge_duplicates`. Private scrapers live in the gitignored `scripts/local/` overlay — see [../../docs/PRIVATE.md](../../docs/PRIVATE.md).
+
+## Configuration
+
+Copy `.env.example` to `.env` only to override defaults (`DB_PATH`, `PORT`, `SCRIPTS_OUTPUT_DIR`, the `TURSO_*` sync settings — see `.env.example` for the full list).
+
+Direct development reads this directory's `.env`. Source and packaged profiles instead resolve the explicit `JOB_TRACKER_CONFIG_FILE` (or their profile default), with process environment values taking precedence. Direct development and the source launchers retain their `apps/api/` compatibility anchor for relative settings; the packaged profile anchors `DB_PATH` and `SCRIPTS_OUTPUT_DIR` to its data root and `WEB_DIST_PATH` to its application root.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `ATTENTION_APPLIED_DAYS` | `21` | Initial Applied inactivity threshold; `0` disables it. |
+| `ATTENTION_IN_PROCESS_DAYS` | `14` | Initial In process inactivity threshold; `0` disables it. |
+| `STALE_NOTIFICATION_TIMEZONE` | Detected local IANA zone, falling back to UTC | Initial saved timezone for the default 09:00 stale alert slot. |
+| `WEB_PUSH_ENABLED` | `true` | Offer browser Web Push subscriptions and send unacknowledged alerts. |
+| `WEB_PUSH_SUBJECT` | Project GitHub HTTPS URL | VAPID contact URI for browser push providers. |
+| `NOTIFICATION_SCHEDULER_ENABLED` | `true` | Publish due notifications on this instance; enable on exactly one instance per synchronized database. |
+
+Initial thresholds must be non-negative integers. Startup seeds `settings.application_staleness` once; saved preferences then remain authoritative across configuration changes and restarts. Change Applied/In process days through Stale applications settings or revision-checked `PATCH /api/settings`; zero disables a stage and saving reconciles existing job deadlines and notification schedules.
+
+Shared preferences store `application_staleness.notification_time` (`HH:MM`), `timezone` (IANA, automatically reported by the active dashboard), `applied_notifications` and `in_process_notifications` (`on|muted|off`), plus `notifications.muted`. Muted publications retain unread inbox entries and get `alert_suppressed_at` rather than a delivery/read receipt; they are excluded from retries. Off cancels/resolves the stage’s automatic notification without changing its stale deadline or badge. A minute worker publishes due reminders and retries unsuppressed, unacknowledged alerts; no retry counters are stored.
+
+Web Push generates `web-push-private.pem` in the installation state directory with mode 0600; preserve it across upgrades. Database backups contain subscriptions, but do not contain this private key. Losing it requires affected browsers to turn notifications off/on to subscribe again. Only supported browser-vendor HTTPS endpoints are accepted. Outbound vendor requests use encrypted payloads and bounded timeouts; successful provider acceptance does not mark a notification delivered. The API must remain running and reachable by the browser service worker for verified background presentation and acknowledgment. Phone browser subscriptions require HTTPS; iOS/iPadOS requires Home Screen installation. This capability does not change the [localhost/trusted-network deployment boundary](../../SECURITY.md).
+
+## Security
+
+Proportionate to a local personal tool, not a hardened public service:
+
+- **CORS allowlist** — `Settings.web_dev_origin` (Vite's dev server) and the extension's fixed `chrome-extension://<Settings.extension_id>` origin are the only browser origins the API answers to with CORS headers.
+- **`TrustedHostMiddleware`** — rejects requests whose `Host` header isn't `Settings.trusted_hosts` (DNS-rebinding guard).
+- **Optional `X-API-Key`** — leave `API_KEY` unset for the normal local setup. When set, every `/api/*` request must carry a matching header or get a `401`; `/docs` and `/openapi.json` stay ungated. Neither the dashboard nor the extension stores or transmits it, so neither can talk to a gated server directly. Use it only behind a trusted intermediary that injects the header, or for scripts that send it themselves.
+
+This is not a supported public-internet authentication model. If the service is made reachable beyond the local machine, put it behind HTTPS and a proper VPN/reverse-proxy identity layer rather than treating the shared key as a login.
+
+## Database
+
+Turso settings select the database mode. Startup creates the schema for an empty file.
+
+| Mode | `.env` | Behaviour |
+| --- | --- | --- |
+| **Local file** (default) | _(nothing)_ | Single SQLite file at `DB_PATH` (default `jobtracker.db`). No network, no sync. |
+| **Embedded replica** | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Reads from the local file; each write is written through to the remote primary. Pulls on boot and every `TURSO_PULL_INTERVAL_SECONDS`. |
+| **Local-first** (recommended) | the two above **+** `TURSO_LOCAL_FIRST=true` | Reads _and_ writes stay local/instant; writes are pushed to the primary in the background and the primary is pulled on boot + on interval. Uses a sibling `<DB_PATH>.sync` replica. |
+
+Local-first pyturso HTTP operations use `TURSO_HTTP_TIMEOUT_SECONDS` (default `10`) as their socket-progress timeout. Scheduled pulls use a one-second server long poll because the scheduler owns their cadence. A timed-out push remains pending in the local replica and retries later; shutdown also stays bounded if the remote is unreachable.
+
+### Local file — setup
+
+The [direct startup command](#run-the-api-directly) creates `jobtracker.db`. Override the path with `DB_PATH=/path/to/jobtracker.db`.
+
+### Cross-device sync (Turso) — setup
+
+Provision the remote once:
+
+1. Install the CLI: `curl -sSfL https://tur.so/install.sh | bash`, then `turso auth login`.
+2. `turso db create job-tracker`
+3. URL: `turso db show job-tracker --url` · token: `turso db tokens create job-tracker`
+4. On each laptop, put in `.env`:
+   ```
+   TURSO_DATABASE_URL=libsql://job-tracker-<org>.turso.io
+   TURSO_AUTH_TOKEN=<token>
+   TURSO_LOCAL_FIRST=true   # omit (or =false) for plain embedded-replica mode
+   ```
+5. Restart the server. Startup pulls the latest remote state before serving.
+
+### Backup & restore
+
+Stop the server, then use the delayed-import CLI to create a consistent SQLite snapshot. It selects `DB_PATH` for local and embedded-replica modes and `<DB_PATH>.sync` for local-first mode, validates SQLite integrity and foreign keys, writes a private temporary sibling, and atomically installs the completed output. The output directory must already exist.
+
+```bash
+uv run python -m app.cli --profile direct backup /safe/path/job-tracker.sqlite
+```
+
+Local SQLite restore validates and migrates a fresh candidate before atomically installing it at `DB_PATH`. An existing destination is refused unless `--replace` is explicit; replacement first preserves a verified automatic backup under the selected backup root.
+
+```bash
+uv run python -m app.cli --profile direct restore /safe/path/job-tracker.sqlite
+uv run python -m app.cli --profile direct restore /safe/path/job-tracker.sqlite --replace
+```
+
+In either Turso mode, general restore never reseeds the primary or overwrites the configured replica. Supply a separate, explicit local recovery target for inspection:
+
+```bash
+uv run python -m app.cli --profile direct restore /safe/path/job-tracker.sqlite --target /safe/path/recovery.sqlite
+```
+
+Startup preserves and validates an existing local Turso store at `<backup root>/recovery/pre-pull.sqlite` before constructing a driver that can pull remote state. If that recovery snapshot fails, startup refuses before contacting the driver.
+
+Packaged installations can adopt an older checkout only while both installations are stopped and the packaged database family is empty:
+
+```bash
+job-tracker migrate-checkout /path/to/old-checkout
+```
+
+The command snapshots the checkout's effective local database without copying its `.env`, credentials, private overlays, logs, or script output, and leaves the checkout unchanged. Validate the adopted local database before configuring Turso separately.
+
+Every database mode, manual snapshot, automatic pre-replacement backup, and pre-pull recovery snapshot includes retained form Answer values and current remembered values. Treat those files and the configured Turso database as private data, and delete each copy separately when removing that data.
+
+### Testing against a throwaway DB
+
+Set `APP_ENV=test` to point the app at the disposable `TURSO_TEST_DATABASE_URL` and relocate the local replica under `.test-db/`, so neither prod data nor prod replica files are touched. The same vars back the `turso`-marked integration tests: `uv run pytest -m turso`, which a plain `pytest` skips.

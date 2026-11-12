@@ -1,0 +1,159 @@
+# Job Tracker features
+
+Job Tracker streamlines the job-search process around one principle: a job remains the same opportunity wherever you encounter it. Listings, actions, notes, status changes, and materials can accumulate in one record instead of being scattered across pages and tools.
+
+The product automates work when a supported source provides reliable evidence and leaves consequential judgments—such as whether two listings are genuinely the same job—to you.
+
+For installation and the current support matrix, see the [project README](../README.md). For internal boundaries and implementation decisions, see [Architecture](ARCHITECTURE.md).
+
+## One opportunity, one history
+
+A job and the listings that represent it are related but distinct. One job can retain several listing URLs and their history, so a repost or another source does not need to become a disconnected application record.
+
+Actions and context stay at the appropriate scope. Notes, events, status, and hiding belong to a tracked job. Blocking belongs to a company and warns you about tracked jobs from that company.
+
+### Reposts stay connected
+
+When Job Tracker finds a possible repost, it suggests a match from the same normalized company with the same normalized title or the same external application destination. Each suggestion shows its evidence: description similarity when descriptions are available, whether the application destination, company page, poster, location, workplace, salary, and apply type agree (with both values when they differ), and how long after the earlier posting closed the new one appeared. The extension's duplicate popover shows it beside the posting; on the dashboard, relinking a listing opens a full-drawer view that leads with these candidates before the rest of the board. Evidence explains a suggestion and never hides one.
+
+You decide whether the suggestion is correct. Confirming a match consolidates the linked listings, application status and history, events, and material records. The former job ID remains an alias of the survivor, so an older link or integration reference still opens and updates the canonical record; deleting through that older ID is refused until the caller uses the canonical ID deliberately. Dismissing a suggestion records a false match so the same incorrect suggestion does not keep returning. Jobs are never merged automatically.
+
+## Capture what can be captured
+
+The browser extension reduces repeated entry on supported sources:
+
+- Opening a supported LinkedIn job detail can capture its listing information, including an external application destination when LinkedIn exposes one, and record that it was seen.
+- Applying on LinkedIn can advance the tracked job when the extension detects reliable evidence of the application.
+- LinkedIn's Applied page can import historical applications.
+- Supported LinkedIn job emails in Gmail can record a rejection using the email timestamp.
+- Listing closure can be detected when LinkedIn stops accepting applications or reports that a recorded posting is invalid or removed, without treating one unavailable URL as proof that the entire opportunity disappeared.
+
+Listing details show compact unavailable/closed dates separately from the job’s progress, with original notices and precise observation times available on hover, focus, or tap. Board cards show one undated label: Unavailable takes precedence over Closed. A confirmed Open LinkedIn listing hides that label; Unknown and Open listings on other platforms do not suppress it. LinkedIn’s gray “Not currently accepting applications” notice means **Unavailable** and preserves the job’s status; a visible, enabled Apply control updates availability to **Open**. Missing or loading controls never imply reopening.
+
+A pre-application job closes automatically only when all of its linked listings are closed. Jobs at applied or later stages keep their application status because a hiring process may continue after its listing closes.
+
+Jobs from sources without a built-in integration can still be created manually from the extension popup.
+
+## Shared extension settings
+
+Description highlights, title rules, Easy Apply enablement, filtered-job Dim/Hide mode, and search-diagnostic capture are saved on the configured server, included in backups, and synchronized when Turso is enabled. The server initializes missing settings with description-highlight defaults and no title rules, preserving saved choices on later startups. Old browser settings are ignored. The dashboard burger menu’s **Extension settings** manages the same settings; **Save settings** applies valid changes together and preserves drafts on conflicts. Web keyword fields use removable chips; title editing fills the dialog, with **Apply rule** staging edits and **Cancel editing** discarding them.
+
+Popup Settings keeps quick Easy Apply, Dim/Hide, and diagnostic-capture controls. **Manage keyword highlights and rules ↗** opens the configured server’s dashboard settings directly. The web’s collapsible **Description highlights** and **Keyword actions** sections own highlight settings and all title-rule viewing, enablement, creation, editing, and deletion. Title rules match **contains**, **starts with**, or **does not contain** any of one list of alternatives, then **outline job card**, **hide**, **star**, or **skip**. Negative conditions require every alternative to be absent; matching ignores case and respects word boundaries. Skip applies only before application, and removing rules preserves recorded actions. The web’s collapsible **Search diagnostics** section keeps the explanation in a tooltip and offers **Clear stored data**; clearing is unavailable in the popup.
+
+## Fill supported Easy Apply questions
+
+On LinkedIn Easy Apply, Job Tracker can reuse knowledge you have reviewed without taking control of the application. It supports ordinary text, LinkedIn's **Location (city)** typeahead, numeric, select, and single-choice radio questions when the page supplies enough stable evidence. The Form Fill workspace separates that knowledge into:
+
+- **Answers**, the reusable values you have verified;
+- **Questions**, exact semantic question identities observed on a supported site; and
+- **Matches**, your explicit connection between one Question and one Answer, including complete option bindings for choice questions.
+
+An active Match to an active Answer may fill the next empty occurrence of that exact Question. A Match can instead ask for confirmation every time or prohibit filling. Both Answers and Matches can be disabled and re-enabled; Matches can also be retired and later reactivated. These state changes retain value-free history rather than deleting the records. Answer labels and stable keys can be corrected with revision checks. An unmapped Answer can also be permanently deleted, which removes its retained value and vocabulary; shared lifecycle rows keep their other context but no longer name the deleted Answer.
+
+Values you type are remembered only after a trusted user change settles. A value that was already present is not remembered unless you choose **Remember existing**, and an extension-written fill is never remembered as user input. A clear invalidates the current remembered value instead of creating a reusable empty value. Remembered values stay provisional in **Needs review** until you ignore them, use one to update an Answer, or promote one into an Answer and Match. Saving a Match separately also consumes one non-conflicting remembered value when its mapped action exactly equals the Answer's current value; a differing value stays pending. Competing current values fill nothing until you choose a revision-checked winner.
+
+The in-form summary opens automatically for attention or manual work until you choose its expanded or collapsed state. The extension is the sole owner of that Boolean preference; it stays in browser-local extension storage and is reused across rescans, steps, modal openings, page loads, and browser restarts. A step with no field status shows no summary panel, and a fill from a remembered value counts as filled instead of producing an all-zero tally.
+
+The dashboard's **Review inbox** combines unmatched Questions and remembered values in one row per exact Question. Matched and Dismissed filters include settled or muted Questions; Saved answers defaults to active entries. Search and server-backed ordering distinguish variants across pages. Display details start hidden, while local workspace/filter/order choices survive reloads. Lists offer Load more, and the Answer chooser loads compatible suggestions with private previews as you scroll; search broadens candidates, and + creates an Answer.
+
+Drawers lead with the Question or Answer and its value, keeping source, details, management, and activity collapsed. Review shows before/after values, filling, affected Questions, and complete editable choice bindings. Unambiguous identical labels receive suggestions; incomplete sets require review. Save actions stay visible, protect unsaved edits, retain drafts on failure, and close after success; Save and review next advances the inbox. Changing a draft or revision invalidates review. Value cleared badges and value-free activity distinguish dismissed remembered values from Question status; dismissal removes the retained value, so it must be entered again. The [dashboard guide](../apps/web/README.md#form-fill-workspace) owns control, pagination, display, and client-state details.
+
+Creating an Answer from a Question fixes its value type from the observed control and, for choice controls, fixes its vocabulary and one-to-one bindings from the active Question options. The Answer and Match are saved together, so an incompatible or stale Match cannot leave behind an unused Answer. Answer labels, descriptions, values, and fill policies remain deliberate user choices.
+
+Existing form values are never overwritten automatically. Job Tracker distinguishes an existing value that already agrees, one that differs, and an empty field it can safely fill. Replacing a differing value is an explicit action and is rechecked against the live control first. Each field is independent, so one unresolved field or request failure does not authorize another write.
+
+A question is numeric only when the input declares a numeric type or input mode; decimals require an explicit decimal signal. LinkedIn years-of-experience inputs declare neither and remain text Questions. The write-safety check independently blocks decimal Answers from integer fields.
+
+In the older LinkedIn modal, Location (city) is filled as text. Redesigned suggestion fields select only an exact matching suggestion; if none matches, they remain empty. Delayed lookups lose permission to act after disabling, step/root changes, control replacement, identity changes, or loss of write ownership. Only trusted user selections are remembered. Captures save in Question order, and older completions cannot erase newer edits/status or refill a pending clear. Disabling cancels unsent work; issued saves may finish. The [extension guide](../apps/extension/README.md#linkedin-easy-apply-form-fill) owns these scanner rules.
+
+Unsupported or ambiguous controls remain local and manual: unlinked typeaheads, malformed/unidentified radios, repeatable profile sections, consent/utility controls, and choices above 512 options. Supported choices within that limit retain complete identity, including phone-country selectors. File/résumé inputs and top-choice preferences are ignored entirely; follow-company is cleared once outside form-fill knowledge and remains available for deliberate selection. Conditional Questions are observed after identity is stable across two scans. Pending eligible values flush before step changes. Job Tracker never clicks Next, Continue, Review, Submit, consent, résumé, profile, follow-company, or top-choice controls and never navigates or submits an application.
+
+## Decide with context
+
+Decision signals lift useful details out of a listing while retaining the surrounding text:
+
+- required years of experience, including numeric ranges and decimals;
+- languages;
+- pay information;
+- seniority and custom terms;
+- applicant and apply-click counts;
+- listing age, shown compactly and tinted by how far past fresh it is;
+- closed-listing and blocked-company warnings.
+
+On LinkedIn, Job Tracker can also show how many times you previously applied to the same company. These signals help you inspect relevant evidence faster; they do not replace your judgment or claim to measure decision accuracy.
+
+Optional persistent actions, including title outlining and automatic hiding, are off by default.
+
+## Act where you encounter the job
+
+Supported pages can expose tracker controls beside the job, reducing the need to switch to the dashboard for routine triage. Discovery cards provide one **Skip job** action for jobs not yet applied to; it records **Skipped** and also dismisses the card through the site when supported. Expanded job views retain the independent **Hide** action and add the same pre-application **Skip job** action. On a LinkedIn job-detail view, `Alt+H` toggles the current job's hidden flag without invoking LinkedIn's native dismiss action, and `Alt+T` moves it forward to **To apply** when that transition is valid. Because those actions update the shared job record, their meaning is not tied to one webpage.
+
+On discovery lists such as LinkedIn search results, job-alert emails, Viewed Jobs reminders, and profile-match recommendations, jobs selected as **To apply**, later-stage jobs, hidden jobs, and blocked-company jobs follow the extension's **Settings → Filtered jobs → Dim / Hide** display preference. In those LinkedIn emails opened in Gmail, **Open new jobs (N)** opens every unaffected posting in background tabs while skipping listings already open in another LinkedIn job tab, including jobs opened by a concurrent bulk request. A bulk-opened tab closes itself after LinkedIn reports that applications are closed and Job Tracker saves that closure; manually opened tabs stay open. This changes only their list-card presentation; selecting **To apply** does not set the independent hidden flag, and the current detail view and dashboard remain available.
+
+The extension popup provides a compact workflow from other browsing contexts. Its search can be seeded from supported pages and domains, ATS URLs, Gmail subjects, and LinkedIn job page titles to reduce typing. From the popup you can:
+
+- search tracked jobs;
+- advance a job through the funnel;
+- backdate a status change;
+- comment on the current status;
+- add a note;
+- create a job manually.
+
+The popup does not provide generic editing of every job field. Full record management remains in the dashboard.
+
+Settings shows the connected server in a compact row with a pencil to change it; saving tests the connection before switching. An amber arrow on the toolbar and popup Settings button signals a build mismatch with the running server. Opening Settings reveals both versions below the header divider. Red connection warnings take priority. See the [extension guide](../apps/extension/README.md#versioning) for comparison details.
+
+## Follow the application through
+
+The dashboard keeps the search visible as a drag-and-drop Kanban workflow. **To apply** cards link to an external application page when it differs from the posting. Each job retains a timeline that records update provenance and time spent at each stage.
+
+For jobs with several listings, the card's posting and application links come from one automatically selected primary listing. Availability takes priority, followed by a saved posting URL, LinkedIn preference, full-detail capture, and newest first capture. An open employer posting therefore beats a closed LinkedIn listing. Every linked listing remains available in job details.
+
+History remains correctable rather than disposable. You can undo a transition, reopen a job, and edit an event's timestamp or comment without erasing the rest of the record.
+
+The **Stale applications** filter identifies applications inactive beyond their Applied/In process threshold. Cards show **N days inactive**. Adding a note resets the deadline; starring, hiding and descriptive edits do not reset an event-based clock. **Settings → Stale applications** controls both thresholds; zero disables a stage.
+
+The job drawer’s Listings, Custom fields, Documents, and Timeline sections can be collapsed. Section choices apply to every job and survive browser reloads; section counts stay visible, and add actions reopen their section. Collapsing preserves the current draft.
+
+The Jobs header funnel opens labelled filters for attention, starred jobs, Easy Apply, listing availability, hidden jobs, and blocked companies. The separate Listing group places “Listing:” beside a dropdown offering All, Unavailable, and Closed. Each narrowed choice shows jobs with at least one matching listing; another open listing does not exclude a match. The funnel takes the accent color when filters are active; the result count and clear-filters action stay beside search. The existing filter keyboard shortcuts remain available.
+
+Custom fields support reusable vocabulary suggestions. Structured material records track which CV, cover letter, or other material accompanied an application, including requested and provided states. Job Tracker records the material's role and status; it does not upload or store the file itself.
+
+### Record how a confirmed application happened
+
+After an application is explicitly confirmed as submitted, an agent can use the API to create or replace one typed workflow record for that job. It can record whether preparation was human-only, agent-assisted, agent-led, or unknown; who submitted through which channel; which narrative kinds were used and their provenance; measured human time when it was actually measured; and references to canonical agent artifacts or external evidence.
+
+This feature is prospective and API-only: existing applications are not backfilled and there is no dashboard editor yet. Unknown workflow facts stay `unknown` or unmeasured instead of being guessed. Funnel outcomes continue to come from the event timeline, while agent-run details and costs stay in their canonical artifacts and are reached through references rather than copied into the workflow record.
+
+The record follows its submitted event through relinks, merges, repeated aliases, and canonical-ID changes. Reverting that event or correcting the job back before application removes the now-invalid record. A merge or relink that would combine two records is refused instead of silently discarding either one.
+
+**About**, available only from the dashboard burger menu, shows the running version and public build identity. It checks the server for a different build, reports failed checks, and offers explicit Reload while protecting unsaved edits. A new verified revision produces a one-time notice; development builds are labelled unverified.
+
+The dashboard can be installed through the browser as a standalone PWA. Its static shell opens offline; loading and saving jobs or answers still requires the configured server.
+
+## Local by default
+
+Job Tracker is a single-user, self-hosted application:
+
+- Local SQLite is the default database.
+- Turso synchronization is optional.
+- The extension talks only to the configured Job Tracker server.
+- There is no third-party analytics.
+- Optional search diagnostics are off by default.
+- Gmail integration recognizes supported job messages in the browser and sends only the structured job and action data needed by the tracker; it does not send or store the email body as a job description.
+
+See [Privacy](../PRIVACY.md) for captured fields, permissions, retention, and deletion, and [Security](../SECURITY.md) for the supported localhost threat model.
+
+## Built to support more sources
+
+LinkedIn jobs and supported LinkedIn job emails in Gmail are the only built-in integrations today. The shared job model is separate from source-specific capture, allowing new sources to be added without redefining the tracked opportunity or its history.
+
+Built-in adapters can extend the public extension. Private or organization-specific adapters can live in a local overlay without being committed to the public repository. See the [extension adapter guide](../apps/extension/README.md) and [private overlay guide](PRIVATE.md) for implementation instructions.
+
+Site layouts change, so source-specific capture occasionally needs an adapter update. The README's [support table](../README.md#whats-built-in-today) remains the authority for what is currently built in.
+
+## Notifications and reminders
+
+The header bell shows a shared notification inbox with unread items first and an unread count. Create a tracker reminder with a title, date/time and optional details. Create linked reminders from the job drawer’s **Reminders** section or the extension’s job detail. The Scheduled tab contains only user-created reminders and supports editing/cancelling them. Stale applications generate automatic notifications and reuse the same alert after new activity resets their deadline.
+
+Open dashboards receive live notifications with an in-app fallback. **Settings → Notifications → Browser notifications → Allow** requests permission and enables Web Push for background delivery on supported browsers; phones need HTTPS and iOS/iPadOS needs a Home Screen installation. Delivery and reading synchronize across devices. An interrupted connection recovers unacknowledged notifications after reconnect; ordinary inbox fetching does not repeat popups. Scheduling requires the designated API instance to run. Notification settings control the daily local alert time (09:00 by default); the active dashboard detects the timezone automatically. Missed daily slots defer to the next slot. Settings provide independent On/Muted/Off controls for Applied and In process stale notifications, plus global mute. Muted notifications still appear unread in the inbox without popups; Off stops that stage’s stale notifications. Stale badges always follow the day thresholds.

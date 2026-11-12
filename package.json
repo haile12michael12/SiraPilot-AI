@@ -1,0 +1,29 @@
+{
+  "name": "job-tracker",
+  "private": true,
+  "homepage": "https://github.com/Muatasim-Aswad/job-tracker#readme",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Muatasim-Aswad/job-tracker.git"
+  },
+  "type": "module",
+  "scripts": {
+    "prepare": "uv run --directory apps/api pre-commit install || true",
+    "verify:all": "vp run verify",
+    "lint:all": "vp run lint",
+    "typecheck:all": "vp run typecheck",
+    "test:all": "vp run test",
+    "build:all": "vp run build",
+    "build:ext": "vp run -F job-tracker-extension --cache build",
+    "build:web": "vp run -F web --cache build",
+    "dev:web": "vp dev apps/web",
+    "format:md": "prettier --write \"**/*.md\"",
+    "check:md": "prettier --check \"**/*.md\""
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

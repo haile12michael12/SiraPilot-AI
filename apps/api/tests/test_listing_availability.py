@@ -1,0 +1,319 @@
+from __future__ import annotations
+
+import sqlite3
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.infra.database import _SCHEMA_PATH, init_schema
+
+GRAY = "Not currently accepting applications"
+RED = "No longer accepting applications"
+EARLIER = "2026-10-19T10:00:00+00:00"
+LATER = "2026-10-19T11:00:00+00:00"
+
+
+def capture(client: TestClient, **fields: object) -> dict[str, object]:
+    response = client.post(
+        "/api/listings", json={"platform": "linkedin", "platform_id": "1", **fields}
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def detail(client: TestClient, job_id: object) -> dict:
+    return client.get(f"/api/jobs/{job_id}").json()
+
+
+@pytest.mark.parametrize("status", ["seen", "to_apply", "applied", "in_process"])
+def test_gray_notice_preserves_funnel_and_capture_evidence(client: TestClient, status: str) -> None:
+    ids = capture(client, title="Example role", company="Example Labs")
+    client.post("/api/events", json={"job_id": ids["job_id"], "events": [{"event": status}]})
+    capture(
+        client,
+        availability="unavailable",
+        availability_message=GRAY,
+        availability_observed_at=EARLIER,
+    )
+    job = detail(client, ids["job_id"])
+    listing = job["listings"][0]
+    assert job["status"] == status
+    assert listing["availability"] == "unavailable"
+    assert listing["availability_message"] == GRAY
+    assert listing["availability_observed_at"] == EARLIER
+    assert listing["closed_at"] is None
+    assert not any(event["event"] == "closed" for event in job["events"])
+
+
+def test_positive_open_observation_replaces_notice_and_partial_capture_preserves_it(
+    client: TestClient,
+) -> None:
+    ids = capture(
+        client,
+        availability="unavailable",
+        availability_message=GRAY,
+        availability_observed_at=EARLIER,
+    )
+    capture(client, availability="open", availability_observed_at=LATER)
+    capture(client, meta_patch={"location": "Example City"})
+    capture(client, availability="unknown")
+    listing = detail(client, ids["job_id"])["listings"][0]
+    assert listing["availability"] == "open"
+    assert listing["availability_message"] is None
+    assert listing["availability_observed_at"] == LATER
+
+
+def test_late_observation_cannot_replace_newer_availability_or_reclose(client: TestClient) -> None:
+    ids = capture(client, availability="open", availability_observed_at=LATER)
+    capture(
+        client, availability="closed", availability_message=RED, availability_observed_at=EARLIER
+    )
+    job = detail(client, ids["job_id"])
+    assert job["status"] == "new"
+    assert job["listings"][0]["availability"] == "open"
+    assert job["listings"][0]["closed_at"] is None
+
+
+def test_positive_apply_evidence_reopens_automatic_closure(client: TestClient) -> None:
+    ids = capture(
+        client, availability="closed", availability_message=RED, availability_observed_at=EARLIER
+    )
+    assert detail(client, ids["job_id"])["status"] == "closed"
+    capture(client, availability="open", availability_observed_at=LATER)
+    job = detail(client, ids["job_id"])
+    assert job["status"] == "new"
+    assert job["listings"][0]["closed_at"] is None
+    assert job["listings"][0]["availability"] == "open"
+
+
+def test_gray_notice_does_not_undo_prior_closure(client: TestClient) -> None:
+    ids = capture(
+        client, availability="closed", availability_message=RED, availability_observed_at=EARLIER
+    )
+    capture(
+        client,
+        availability="unavailable",
+        availability_message=GRAY,
+        availability_observed_at=LATER,
+    )
+    job = detail(client, ids["job_id"])
+    assert job["status"] == "closed"
+    assert job["listings"][0]["availability"] == "closed"
+    assert job["listings"][0]["availability_message"] == GRAY
+
+
+def test_positive_apply_evidence_preserves_manual_closure(client: TestClient) -> None:
+    ids = capture(client)
+    client.post("/api/events", json={"job_id": ids["job_id"], "events": [{"event": "closed"}]})
+    capture(client, availability="open", availability_observed_at=LATER)
+    assert detail(client, ids["job_id"])["status"] == "closed"
+
+
+def test_legacy_closed_at_capture_and_explicit_reopening_remain_consistent(
+    client: TestClient,
+) -> None:
+    ids = capture(client, closed_at=EARLIER)
+    assert detail(client, ids["job_id"])["listings"][0]["availability"] == "closed"
+    response = client.patch(f"/api/listings/{ids['listing_id']}", json={"closed_at": None})
+    assert response.status_code == 200
+    assert detail(client, ids["job_id"])["listings"][0]["availability"] == "unknown"
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_recapture_preserves_first_closure_until_reopened(client: TestClient, legacy: bool) -> None:
+    def close(at: str) -> dict[str, object]:
+        return capture(
+            client,
+            closed_at=at,
+            **(
+                {}
+                if legacy
+                else {
+                    "availability": "closed",
+                    "availability_message": RED,
+                    "availability_observed_at": at,
+                }
+            ),
+        )
+
+    ids = close(EARLIER)
+    close(LATER)
+    listing = detail(client, ids["job_id"])["listings"][0]
+    assert listing["closed_at"] == EARLIER
+    if not legacy:
+        assert listing["availability_observed_at"] == LATER
+    capture(client, availability="open", availability_observed_at=LATER)
+    close("2026-10-19T12:00:00+00:00")
+    listing = detail(client, ids["job_id"])["listings"][0]
+    assert listing["closed_at"] == "2026-10-19T12:00:00+00:00"
+
+
+def test_job_cards_summarize_listing_availability_without_changing_status(
+    client: TestClient,
+) -> None:
+    ids = capture(client, availability="unavailable", availability_observed_at=EARLIER)
+    client.post(
+        "/api/listings",
+        json={
+            "platform": "linkedin",
+            "platform_id": "2",
+            "job_id": ids["job_id"],
+            "availability": "closed",
+            "closed_at": EARLIER,
+        },
+    )
+    card = client.get("/api/jobs").json()[0]
+    assert card["status"] == "new"
+    assert card["availability"] == "unavailable"
+    assert detail(client, ids["job_id"])["availability"] == "unavailable"
+    assert card["listing_availability"] == {
+        "linkedin_open_count": 0,
+        "unavailable_count": 1,
+        "closed_count": 1,
+        "unavailable_observed_at": EARLIER,
+        "closed_at": EARLIER,
+    }
+
+
+@pytest.mark.parametrize("platform", ["linkedin", "other"])
+@pytest.mark.parametrize("availability", ["unknown", "open"])
+def test_card_warning_suppression_requires_a_confirmed_open_linkedin_listing(
+    client: TestClient, platform: str, availability: str
+) -> None:
+    ids = capture(client, availability="unavailable", availability_observed_at=EARLIER)
+    response = client.post(
+        "/api/listings",
+        json={
+            "platform": platform,
+            "platform_id": "2",
+            "job_id": ids["job_id"],
+            "availability": availability,
+        },
+    )
+    assert response.status_code == 200, response.text
+    summary = client.get("/api/jobs").json()[0]["listing_availability"]
+    assert summary["unavailable_count"] == 1
+    assert summary["linkedin_open_count"] == int(platform == "linkedin" and availability == "open")
+
+
+@pytest.mark.parametrize(
+    ("observations", "expected"),
+    [
+        ([], "unknown"),
+        ([("linkedin", "unknown")], "unknown"),
+        ([("other", "open")], "unknown"),
+        ([("linkedin", "open")], "open"),
+        ([("other", "unavailable")], "unavailable"),
+        ([("other", "closed")], "closed"),
+        ([("linkedin", "closed"), ("other", "unavailable")], "unavailable"),
+        ([("linkedin", "closed"), ("other", "open")], "closed"),
+        ([("other", "unavailable"), ("other", "open")], "unavailable"),
+        ([("other", "closed"), ("linkedin", "unknown")], "closed"),
+        ([("other", "closed"), ("linkedin", "open")], "open"),
+        ([("other", "unavailable"), ("linkedin", "open")], "open"),
+        ([("other", "closed"), ("other", "unavailable"), ("linkedin", "open")], "open"),
+    ],
+)
+def test_job_availability_is_the_same_read_only_projection_in_summary_and_detail(
+    client: TestClient, conn: sqlite3.Connection, observations: list[tuple[str, str]], expected: str
+) -> None:
+    ids = capture(client)
+    for index, (platform, availability) in enumerate(observations, start=2):
+        response = client.post(
+            "/api/listings",
+            json={
+                "platform": platform,
+                "platform_id": str(index),
+                "job_id": ids["job_id"],
+                "availability": availability,
+            },
+        )
+        assert response.status_code == 200, response.text
+    before = conn.total_changes
+
+    assert client.get("/api/jobs").json()[0]["availability"] == expected
+    assert detail(client, ids["job_id"])["availability"] == expected
+    assert conn.total_changes == before
+
+
+@pytest.mark.parametrize("operation", ["merge", "relink"])
+def test_job_availability_refreshes_after_topology_changes_and_reopening(
+    client: TestClient, operation: str
+) -> None:
+    first = capture(client, availability="unavailable", availability_observed_at=EARLIER)
+    second = capture(client, platform_id="2", availability="open")
+    if operation == "merge":
+        response = client.post(
+            f"/api/jobs/{second['job_id']}/link-job", json={"other_job_id": first["job_id"]}
+        )
+    else:
+        response = client.patch(
+            f"/api/listings/{second['listing_id']}", json={"job_id": first["job_id"]}
+        )
+    assert response.status_code == 200, response.text
+    survivor_id = response.json()["job_id"]
+
+    def assert_availability(expected: str) -> None:
+        assert client.get("/api/jobs").json()[0]["availability"] == expected
+        assert detail(client, survivor_id)["availability"] == expected
+        assert detail(client, first["job_id"])["availability"] == expected
+        assert detail(client, second["job_id"])["availability"] == expected
+
+    assert_availability("open")
+    deleted = client.delete(f"/api/listings/{second['listing_id']}")
+    assert deleted.status_code == 204
+    assert_availability("unavailable")
+    closed = client.patch(f"/api/listings/{first['listing_id']}", json={"closed_at": EARLIER})
+    assert closed.status_code == 200, closed.text
+    assert_availability("closed")
+    capture(client, availability="open")
+    assert_availability("open")
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"availability": "paused"},
+        {"availability_message": GRAY},
+        {"availability": "open", "closed_at": EARLIER},
+        {"availability": "open", "availability_observed_at": "2026-10-19T10:00:00"},
+    ],
+)
+def test_invalid_availability_evidence_is_rejected(client: TestClient, fields: dict) -> None:
+    assert (
+        client.post(
+            "/api/listings", json={"platform": "linkedin", "platform_id": "1", **fields}
+        ).status_code
+        == 422
+    )
+
+
+def test_additive_availability_migration_upgrades_old_shape_once() -> None:
+    conn = sqlite3.connect(":memory:")
+    try:
+        # Construct the released baseline before additive columns were introduced.
+        with patch("app.infra.database._COLUMN_MIGRATIONS", ()):
+            init_schema(conn, _SCHEMA_PATH)
+        conn.execute(
+            "INSERT INTO jobs (id, status, created_at, updated_at) VALUES ('j1', 'seen', 't', 't')"
+        )
+        conn.execute(
+            "INSERT INTO listings (id, job_id, platform, platform_id, closed_at) VALUES ('l1', 'j1', 'linkedin', '1', ?)",
+            (EARLIER,),
+        )
+        conn.commit()
+        init_schema(conn)
+        assert conn.execute(
+            "SELECT availability, availability_message, availability_observed_at, closed_at FROM listings"
+        ).fetchone() == ("unknown", None, None, EARLIER)
+        conn.execute(
+            "UPDATE listings SET availability = 'unavailable', availability_message = ?", (GRAY,)
+        )
+        conn.commit()
+        init_schema(conn)
+        assert conn.execute(
+            "SELECT availability, availability_message FROM listings"
+        ).fetchone() == ("unavailable", GRAY)
+    finally:
+        conn.close()

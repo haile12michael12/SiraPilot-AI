@@ -1,0 +1,1183 @@
+import { copy } from "./copy";
+import { onPreferencesChanged } from "../preferences.js";
+import type { FormFillResolutionRequest } from "../messages.js";
+import { SERVER_URL, onServerChanged } from "../config.js";
+import { CaptureQueue, type PendingCapture } from "./captureQueue.js";
+import {
+  captureThroughWorker,
+  resolveThroughWorker,
+  type CaptureBridge,
+  type ResolutionBridge,
+} from "./bridge.js";
+import {
+  applyAction,
+  canApplyAction,
+  controlMatchesAction,
+  isControlEmpty,
+  isRestorable,
+  restoreSnapshot,
+  snapshotControl,
+  snapshotsEqual,
+  validationEvidence,
+  type ControlSnapshot,
+} from "./controls.js";
+import {
+  clearLinkedInFollowCompanyDefault,
+  discoverLinkedInFields,
+  fieldFingerprint,
+  fieldIdentityFingerprint,
+  linkedInPlatformId,
+  stepIdentity,
+  stepProgress,
+} from "./linkedin.js";
+import { clearPresentation, isPresentationMutation, renderPresentation } from "./presentation.js";
+import { EasyApplyRootFinder, isDialogMutation, openShadowRoots, type SearchTree } from "./root.js";
+import { chooseSuggestion, isSuggestionTarget, waitForExactSuggestion } from "./suggestions.js";
+import {
+  EASY_APPLY_SUMMARY_OPEN_KEY,
+  loadEasyApplyEnabled,
+  loadEasyApplySummaryOpen,
+  saveEasyApplySummaryOpen,
+} from "./settings.js";
+import type {
+  FillAction,
+  ManualField,
+  PresentedAction,
+  PresentedField,
+  ResolutionResult,
+  SupportedField,
+} from "./types.js";
+
+const ADAPTER_ID = "linkedin.easy_apply";
+const ADAPTER_VERSION = "1";
+const SITE_SCOPE = "linkedin:easy-apply";
+const SETTLE_MS = 180;
+const CAPTURE_SETTLE_MS = 400;
+
+function defaultId(): string {
+  return crypto.randomUUID();
+}
+
+function progressValue(root: HTMLElement): number | null {
+  const value = stepProgress(root)?.value;
+  return value !== undefined && Number.isFinite(value) ? value : null;
+}
+
+function dashboardQuestionUrl(questionId: string): string {
+  const url = new URL(SERVER_URL);
+  url.searchParams.set("view", "form-fill");
+  url.searchParams.set("section", "review");
+  url.searchParams.set("type", "questions");
+  url.searchParams.set("question", questionId);
+  return url.toString();
+}
+
+function manualPresentation(field: ManualField, clientFieldId: string): PresentedField {
+  return {
+    clientFieldId,
+    container: field.container,
+    prompt: field.prompt,
+    state: "manual",
+    label: copy.scanner.completeThisManually,
+    detail: field.reason,
+  };
+}
+
+function snapshotKey(snapshot: ControlSnapshot): string {
+  return JSON.stringify(snapshot);
+}
+
+function actionKey(action: FillAction): string {
+  return JSON.stringify(action);
+}
+
+interface RuntimeField {
+  field: SupportedField;
+  identity: string;
+  expected: ControlSnapshot;
+  result: ResolutionResult;
+  generation: number;
+  root: HTMLElement;
+  stepKey: string;
+  platformId: string;
+}
+
+interface OwnershipRecord {
+  control: SupportedField["control"];
+  before: ControlSnapshot;
+  after: ControlSnapshot;
+  identity: string;
+  action: FillAction;
+  source: "approved" | "captured";
+  stepKey: string;
+}
+
+interface FieldNote {
+  state: "remembered" | "cleared" | "kept" | "reverted" | "failed" | "attention";
+  label: string;
+  detail?: string;
+  signature: string;
+}
+
+export interface ScannerOptions {
+  bridge?: ResolutionBridge;
+  captureBridge?: CaptureBridge;
+  id?: () => string;
+  isUserEvent?: (event: Event) => boolean;
+  settleMs?: number;
+  captureSettleMs?: number;
+  saveSummaryOpen?: (open: boolean) => void;
+  now?: () => number;
+}
+
+export class EasyApplyScanner {
+  private readonly bridge: ResolutionBridge;
+  private readonly captures: CaptureQueue;
+  private readonly id: () => string;
+  private readonly isUserEvent: (event: Event) => boolean;
+  private readonly settleMs: number;
+  private readonly captureSettleMs: number;
+  private readonly saveSummaryOpen: (open: boolean) => void;
+  private readonly applicationContextId: string;
+  private readonly rootFinder: EasyApplyRootFinder;
+  private generation = 0;
+  private enableEpoch = 0;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private observer: MutationObserver | undefined;
+  private observedTrees = new Set<SearchTree>();
+  private enabled = false;
+  private stepKey: string | null = null;
+  private stepProgress: number | null = null;
+  private baselineHandles = new Set<string>();
+  private runtimeFields = new Map<string, RuntimeField>();
+  private ownership = new Map<string, OwnershipRecord>();
+  private conditionalIdentities = new Map<string, string>();
+  private conditionalTimer: ReturnType<typeof setTimeout> | undefined;
+  private notes = new Map<string, FieldNote>();
+  private suppressedWrites = new Set<string>();
+  private handledFollowCompanyControls = new WeakSet<HTMLInputElement>();
+  private writeDepth = 0;
+  private renderedRoot: HTMLElement | null = null;
+  private renderedFields: PresentedField[] = [];
+  private summaryPreferenceKnown = false;
+  private summaryOpen: boolean | undefined;
+
+  constructor(
+    private readonly doc: Document,
+    options: ScannerOptions = {},
+  ) {
+    this.bridge = options.bridge ?? resolveThroughWorker;
+    this.id = options.id ?? defaultId;
+    this.isUserEvent = options.isUserEvent ?? ((event) => event.isTrusted);
+    this.settleMs = options.settleMs ?? SETTLE_MS;
+    this.captureSettleMs = options.captureSettleMs ?? CAPTURE_SETTLE_MS;
+    this.saveSummaryOpen = options.saveSummaryOpen ?? saveEasyApplySummaryOpen;
+    this.applicationContextId = this.id();
+    this.rootFinder = new EasyApplyRootFinder(doc, options.now);
+    this.captures = new CaptureQueue(
+      {
+        bridge: options.captureBridge ?? captureThroughWorker,
+        id: this.id,
+        settleMs: this.captureSettleMs,
+        applicationContextId: this.applicationContextId,
+      },
+      {
+        runtimeFor: (handle) => this.runtimeFields.get(handle),
+        enabled: () => this.enabled,
+        epoch: () => this.enableEpoch,
+        waitingForValidation: (handle, snapshot) => {
+          this.notes.set(handle, {
+            state: "attention",
+            label: copy.scanner.waitingForNumericValidation,
+            detail: copy.scanner.thisValueWillBeRememberedOnlyAfterValidationSucceeds,
+            signature: snapshotKey(snapshot),
+          });
+        },
+        incompleteChoice: (handle, snapshot) => {
+          this.notes.set(handle, {
+            state: "failed",
+            label: copy.scanner.couldNotRememberThisChoice,
+            detail: copy.scanner.itsCurrentOptionIdentityIsIncomplete,
+            signature: snapshotKey(snapshot),
+          });
+          this.renderCurrent();
+        },
+        settled: (handle, pending, questionId, cleared, ok) =>
+          this.captureSettled(handle, pending, questionId, cleared, ok),
+      },
+    );
+  }
+
+  setSummaryOpenPreference(open: boolean | undefined): void {
+    this.summaryPreferenceKnown = true;
+    if (open === this.summaryOpen) return;
+    this.summaryOpen = open;
+    this.renderCurrent();
+  }
+
+  initializeSummaryOpenPreference(open: boolean | undefined): void {
+    if (this.summaryPreferenceKnown) return;
+    this.setSummaryOpenPreference(open);
+  }
+
+  private rememberSummaryOpen(open: boolean): void {
+    this.summaryPreferenceKnown = true;
+    if (open === this.summaryOpen) return;
+    this.summaryOpen = open;
+    this.saveSummaryOpen(open);
+    this.renderCurrent();
+  }
+
+  private readonly onActivation = (event: Event) => {
+    if (!(event.target instanceof Element)) return;
+    this.rootFinder.noteActivation(event.target);
+    this.noteSuggestionPick(event);
+    // LinkedIn may remount a radio group while handling the click, so its input and
+    // change events fire on detached inputs that never reach this listener.
+    if (event.target instanceof HTMLInputElement && event.target.type === "radio") {
+      this.onControlEvent(event);
+    }
+  };
+
+  private readonly onKeydown = (event: Event) => {
+    if (event instanceof KeyboardEvent && event.key === "Enter") this.noteSuggestionPick(event);
+  };
+
+  // A suggestion value is remembered only once the user picks it; typed text
+  // is a search, not an answer.
+  private noteSuggestionPick(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof Element) || this.writeDepth > 0 || !this.isUserEvent(event)) return;
+    const root = this.easyApplyRoot();
+    if (!root) return;
+    const picked = discoverLinkedInFields(root).find(
+      (item): item is SupportedField =>
+        item.kind === "supported" &&
+        item.pickSuggestion &&
+        (item.control === target || isSuggestionTarget(item.control, target)),
+    );
+    if (!picked) return;
+    const epoch = this.enableEpoch;
+    const step = stepIdentity(root);
+    setTimeout(() => {
+      if (!this.enabled || epoch !== this.enableEpoch || stepIdentity(root) !== step) return;
+      const live = this.easyApplyRoot() === root ? this.livePick(root, picked.handle) : null;
+      if (
+        live &&
+        fieldIdentityFingerprint(live) === fieldIdentityFingerprint(picked) &&
+        !isControlEmpty(live)
+      ) {
+        this.ownership.delete(live.handle);
+        this.notes.delete(live.handle);
+        this.captures.queue(root, live, "user_input", true);
+        this.schedule();
+      }
+    }, this.captureSettleMs);
+  }
+
+  private livePick(root: HTMLElement, handle: string): SupportedField | null {
+    const field = discoverLinkedInFields(root).find((item) => item.handle === handle);
+    return field?.kind === "supported" ? field : null;
+  }
+
+  private readonly onControlEvent = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof Element) || this.writeDepth > 0) return;
+    const root = this.easyApplyRoot();
+    if (!root?.contains(target)) return;
+    const field = discoverLinkedInFields(root).find(
+      (item): item is SupportedField =>
+        item.kind === "supported" && item.container.contains(target),
+    );
+    if (!field) return;
+
+    const eventStep = stepIdentity(root);
+    if (eventStep === this.stepKey && !this.baselineHandles.has(field.handle)) return;
+
+    if (event.type === "focusout") {
+      if (!this.isUserEvent(event)) return;
+      this.captures.validate(field);
+      return;
+    }
+
+    const identity = fieldIdentityFingerprint(field);
+    const current = snapshotControl(field);
+    const owned = this.ownership.get(field.handle);
+    if (
+      owned &&
+      owned.control === field.control &&
+      owned.identity === identity &&
+      snapshotsEqual(current, owned.after)
+    ) {
+      return;
+    }
+    if (owned && (!snapshotsEqual(current, owned.after) || owned.identity !== identity)) {
+      this.ownership.delete(field.handle);
+    }
+    if (!this.isUserEvent(event)) {
+      this.schedule();
+      return;
+    }
+    const runtime = this.runtimeFields.get(field.handle);
+    if (
+      runtime &&
+      runtime.identity === identity &&
+      snapshotsEqual(current, runtime.expected) &&
+      !this.captures.has(field.handle) &&
+      !this.captures.hasSucceeded(field.handle) &&
+      this.notes.get(field.handle)?.state !== "failed"
+    ) {
+      return;
+    }
+    this.notes.delete(field.handle);
+    for (const key of [...this.suppressedWrites]) {
+      if (key.startsWith(`${field.handle}\u0000`)) this.suppressedWrites.delete(key);
+    }
+
+    if (!field.pickSuggestion || isControlEmpty(field)) {
+      this.captures.queue(root, field, "user_input", false);
+    }
+    this.schedule();
+  };
+
+  private easyApplyRoot(): HTMLElement | null {
+    return this.rootFinder.find();
+  }
+
+  private refreshObservedTrees(): void {
+    if (!this.observer) return;
+    const trees: SearchTree[] = [this.doc, ...openShadowRoots(this.doc)];
+    for (const tree of trees) {
+      if (this.observedTrees.has(tree)) continue;
+      this.observedTrees.add(tree);
+      this.observer.observe(tree instanceof Document ? tree.documentElement : tree, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: [
+          "aria-hidden",
+          "aria-invalid",
+          "aria-required",
+          "disabled",
+          "open",
+          "required",
+        ],
+      });
+      tree.addEventListener("click", this.onActivation, true);
+      tree.addEventListener("keydown", this.onKeydown, true);
+      tree.addEventListener("input", this.onControlEvent, true);
+      tree.addEventListener("change", this.onControlEvent, true);
+      tree.addEventListener("focusout", this.onControlEvent, true);
+    }
+  }
+
+  resetServer(): void {
+    const enabled = this.enabled;
+    this.setEnabled(false);
+    this.ownership.clear();
+    this.captures.resetServer();
+    this.notes.clear();
+    this.suppressedWrites.clear();
+    this.setEnabled(enabled);
+  }
+
+  setEnabled(enabled: boolean): void {
+    if (enabled === this.enabled) return;
+    this.enabled = enabled;
+    if (!enabled) {
+      this.generation += 1;
+      this.enableEpoch += 1;
+      if (this.timer) clearTimeout(this.timer);
+      this.captures.cancelPending();
+      if (this.conditionalTimer) clearTimeout(this.conditionalTimer);
+      this.conditionalTimer = undefined;
+      this.conditionalIdentities.clear();
+      this.observer?.disconnect();
+      this.observer = undefined;
+      for (const tree of this.observedTrees) {
+        tree.removeEventListener("click", this.onActivation, true);
+        tree.removeEventListener("keydown", this.onKeydown, true);
+        tree.removeEventListener("input", this.onControlEvent, true);
+        tree.removeEventListener("change", this.onControlEvent, true);
+        tree.removeEventListener("focusout", this.onControlEvent, true);
+      }
+      this.observedTrees.clear();
+      this.rootFinder.reset();
+      clearPresentation(this.doc);
+      this.stepKey = null;
+      this.stepProgress = null;
+      this.baselineHandles.clear();
+      this.runtimeFields.clear();
+      this.handledFollowCompanyControls = new WeakSet<HTMLInputElement>();
+      this.renderedFields = [];
+      this.renderedRoot = null;
+      return;
+    }
+    this.observer = new MutationObserver((mutations) => {
+      this.refreshObservedTrees();
+      if (
+        mutations.some(
+          (mutation) => !isPresentationMutation(mutation) && isDialogMutation(mutation),
+        )
+      ) {
+        this.schedule();
+      }
+    });
+    this.refreshObservedTrees();
+    this.schedule();
+  }
+
+  schedule(): void {
+    if (!this.enabled) return;
+    this.generation += 1;
+    if (this.timer) clearTimeout(this.timer);
+    const expected = this.generation;
+    this.timer = setTimeout(() => void this.scan(expected), this.settleMs);
+  }
+
+  private writeSuppressionKey(runtime: RuntimeField, snapshot: ControlSnapshot): string {
+    const result = runtime.result;
+    const action =
+      result.status === "approved" || result.status === "captured" ? result.action : null;
+    return `${runtime.field.handle}\u0000${runtime.stepKey}\u0000${runtime.identity}\u0000${snapshotKey(snapshot)}\u0000${action ? actionKey(action) : ""}`;
+  }
+
+  private liveField(runtime: RuntimeField): SupportedField | null {
+    if (
+      runtime.generation !== this.generation ||
+      !this.enabled ||
+      this.easyApplyRoot() !== runtime.root ||
+      stepIdentity(runtime.root) !== runtime.stepKey
+    ) {
+      return null;
+    }
+    const field = discoverLinkedInFields(runtime.root).find(
+      (item): item is SupportedField =>
+        item.kind === "supported" && item.handle === runtime.field.handle,
+    );
+    return field && fieldIdentityFingerprint(field) === runtime.identity ? field : null;
+  }
+
+  private basePresentation(runtime: RuntimeField) {
+    return {
+      clientFieldId: runtime.field.request.client_field_id,
+      container: runtime.field.container,
+      prompt: runtime.field.request.prompt,
+      dashboardUrl: dashboardQuestionUrl(runtime.result.question_id),
+    };
+  }
+
+  private updatePresentation(container: HTMLElement, field: PresentedField): void {
+    const index = this.renderedFields.findIndex((item) => item.container === container);
+    if (index >= 0) this.renderedFields[index] = field;
+    else this.renderedFields.push(field);
+    this.renderCurrent();
+  }
+
+  private renderCurrent(): void {
+    if (!this.renderedRoot || !this.renderedRoot.isConnected) return;
+    const hasOwnedWrites = [...this.ownership.entries()].some(([handle, owned]) => {
+      const runtime = this.runtimeFields.get(handle);
+      const live = runtime ? this.liveField(runtime) : null;
+      return (
+        !!live &&
+        isRestorable(owned.before) &&
+        owned.control === live.control &&
+        owned.identity === fieldIdentityFingerprint(live) &&
+        snapshotsEqual(snapshotControl(live), owned.after)
+      );
+    });
+    renderPresentation(this.renderedRoot, this.renderedFields, {
+      undoAll: hasOwnedWrites ? () => this.undoAll() : undefined,
+      open: this.summaryOpen,
+      onOpenChange: (open) => this.rememberSummaryOpen(open),
+    });
+  }
+
+  private presentationForAction(runtime: RuntimeField): PresentedField {
+    const base = this.basePresentation(runtime);
+    const result = runtime.result;
+    if (result.status !== "approved" && result.status !== "captured") {
+      return { ...base, state: "error", label: copy.scanner.couldNotCheckThisField };
+    }
+    const live = this.liveField(runtime);
+    if (!live) return { ...base, state: "error", label: copy.scanner.fieldChangedBeforeFilling };
+    runtime.field = live;
+    const current = snapshotControl(live);
+    const owned = this.ownership.get(live.handle);
+    const note = this.notes.get(live.handle);
+    if (
+      owned &&
+      owned.control === live.control &&
+      owned.identity === runtime.identity &&
+      snapshotsEqual(current, owned.after)
+    ) {
+      if (validationEvidence(live) === "error") {
+        this.notes.set(live.handle, {
+          state: "failed",
+          label: copy.scanner.filledValueNeedsAttention,
+          detail: copy.scanner.theHostReportedAValidationErrorJobTrackerWill,
+          signature: snapshotKey(current),
+        });
+        return {
+          ...base,
+          state: "failed",
+          label: copy.scanner.filledValueNeedsAttention,
+          detail: copy.scanner.theHostReportedAValidationErrorJobTrackerWill,
+          actions: this.revertActions(live.handle, owned.before),
+        };
+      }
+      return {
+        ...base,
+        state: "filled",
+        label:
+          owned.source === "captured"
+            ? copy.scanner.filledFromARememberedValue
+            : copy.scanner.filledFromVerifiedAnswer,
+        actions: this.revertActions(live.handle, owned.before),
+      };
+    }
+    if (note && note.signature === snapshotKey(current)) {
+      return {
+        ...base,
+        state: note.state,
+        label: note.label,
+        detail: note.detail,
+      };
+    }
+    if (controlMatchesAction(live, result.action)) {
+      return {
+        ...base,
+        state: "already",
+        label:
+          result.status === "captured"
+            ? copy.scanner.alreadyMatchesRememberedValue
+            : copy.scanner.alreadyMatchesYourAnswer,
+      };
+    }
+    const suppressed = this.writeSuppressionKey(runtime, current);
+    if (this.suppressedWrites.has(suppressed)) {
+      return { ...base, state: "kept", label: copy.scanner.existingValueKept };
+    }
+    if (isControlEmpty(live)) {
+      return this.applyRuntime(runtime, false);
+    }
+    return {
+      ...base,
+      state: "differs",
+      label: copy.scanner.existingValueDiffers,
+      detail: copy.scanner.theCurrentValueWasPreserved,
+      actions: [
+        {
+          label: copy.scanner.useMyAnswer,
+          kind: "primary",
+          run: () => this.updatePresentation(live.container, this.applyRuntime(runtime, true)),
+        },
+        {
+          label: copy.scanner.keepExisting,
+          run: () => {
+            this.suppressedWrites.add(this.writeSuppressionKey(runtime, snapshotControl(live)));
+            this.updatePresentation(live.container, {
+              ...base,
+              state: "kept",
+              label: copy.scanner.existingValueKept,
+            });
+          },
+        },
+        {
+          label: copy.scanner.rememberExisting,
+          run: () => this.rememberExisting(runtime),
+        },
+      ],
+    };
+  }
+
+  private applyRuntime(runtime: RuntimeField, explicitReplacement: boolean): PresentedField {
+    const base = this.basePresentation(runtime);
+    const result = runtime.result;
+    if (result.status !== "approved" && result.status !== "captured") {
+      return { ...base, state: "failed", label: copy.scanner.noFillActionIsAvailable };
+    }
+    const live = this.liveField(runtime);
+    if (!live || !snapshotsEqual(snapshotControl(live), runtime.expected)) {
+      return {
+        ...base,
+        state: "failed",
+        label: copy.scanner.fieldChangedBeforeFilling,
+        detail: copy.scanner.theLatestFormValueWasPreserved,
+      };
+    }
+    if (!explicitReplacement && !isControlEmpty(live)) {
+      return {
+        ...base,
+        state: "differs",
+        label: copy.scanner.existingValueDiffers,
+        detail: copy.scanner.theCurrentValueWasPreserved,
+      };
+    }
+    if (!canApplyAction(live, result.action)) {
+      return {
+        ...base,
+        state: "failed",
+        label: copy.scanner.fillInstructionIsIncompatible,
+        detail: copy.scanner.completeThisFieldManually,
+      };
+    }
+
+    const before = snapshotControl(live);
+    this.writeDepth += 1;
+    let applied = false;
+    try {
+      applied = applyAction(live, result.action);
+    } finally {
+      this.writeDepth -= 1;
+    }
+    const after = snapshotControl(live);
+    if (!applied || !controlMatchesAction(live, result.action)) {
+      this.suppressedWrites.add(this.writeSuppressionKey(runtime, snapshotControl(live)));
+      return {
+        ...base,
+        state: "failed",
+        label: copy.scanner.couldNotVerifyTheFilledValue,
+        detail: copy.scanner.jobTrackerWillNotRetryThisField,
+      };
+    }
+    runtime.field = live;
+    runtime.expected = after;
+    const ownership: OwnershipRecord = {
+      control: live.control,
+      before,
+      after,
+      identity: runtime.identity,
+      action: result.action,
+      source: result.status,
+      stepKey: runtime.stepKey,
+    };
+    this.ownership.set(live.handle, ownership);
+    if (live.pickSuggestion) void this.pickSuggestion(runtime, live, ownership);
+    if (validationEvidence(live) === "error") {
+      return {
+        ...base,
+        state: "failed",
+        label: copy.scanner.filledValueNeedsAttention,
+        detail: copy.scanner.theHostReportedAValidationErrorJobTrackerWill,
+        actions: this.revertActions(live.handle, before),
+      };
+    }
+    return {
+      ...base,
+      state: "filled",
+      label:
+        result.status === "captured"
+          ? copy.scanner.filledFromARememberedValue
+          : copy.scanner.filledFromVerifiedAnswer,
+      actions: this.revertActions(live.handle, before),
+    };
+  }
+
+  private async pickSuggestion(
+    runtime: RuntimeField,
+    field: SupportedField,
+    ownership: OwnershipRecord,
+  ): Promise<void> {
+    const typed = snapshotControl(field);
+    const epoch = this.enableEpoch;
+    // Suggestion-list mutations may schedule a scan; only live identity and write
+    // ownership authorize the delayed click or rollback.
+    const isCurrent = () => {
+      if (
+        !this.enabled ||
+        epoch !== this.enableEpoch ||
+        this.easyApplyRoot() !== runtime.root ||
+        stepIdentity(runtime.root) !== runtime.stepKey ||
+        this.ownership.get(field.handle) !== ownership
+      )
+        return false;
+      const live = this.livePick(runtime.root, field.handle);
+      return (
+        !!live &&
+        live.control === field.control &&
+        fieldIdentityFingerprint(live) === runtime.identity &&
+        snapshotsEqual(snapshotControl(live), typed)
+      );
+    };
+    const option = await waitForExactSuggestion(
+      field.control,
+      field.control.value,
+      undefined,
+      isCurrent,
+    );
+    if (!isCurrent()) return;
+    if (option?.isConnected && isSuggestionTarget(field.control, option)) {
+      this.writeDepth += 1;
+      try {
+        chooseSuggestion(option);
+      } finally {
+        this.writeDepth -= 1;
+      }
+      if (snapshotsEqual(snapshotControl(field), typed)) return;
+    }
+    this.writeDepth += 1;
+    try {
+      if (!isCurrent()) return;
+      restoreSnapshot(field, ownership.before);
+    } finally {
+      this.writeDepth -= 1;
+    }
+    this.ownership.delete(field.handle);
+    const current = snapshotControl(field);
+    this.suppressedWrites.add(this.writeSuppressionKey(runtime, current));
+    this.notes.set(field.handle, {
+      state: "failed",
+      label: copy.scanner.noExactSuggestionToSelect,
+      detail: copy.scanner.completeThisFieldManually,
+      signature: snapshotKey(current),
+    });
+    this.schedule();
+  }
+
+  private resultPresentation(runtime: RuntimeField): PresentedField {
+    const base = this.basePresentation(runtime);
+    const result = runtime.result;
+    const pending = this.captures.get(runtime.field.handle);
+    if (
+      pending?.identity === runtime.identity &&
+      snapshotsEqual(snapshotControl(runtime.field), pending.snapshot)
+    ) {
+      const note = this.notes.get(runtime.field.handle);
+      return {
+        ...base,
+        state: note?.signature === snapshotKey(pending.snapshot) ? note.state : "attention",
+        label:
+          note?.signature === snapshotKey(pending.snapshot)
+            ? note.label
+            : copy.scanner.waitingToRememberThisChange,
+        detail: note?.signature === snapshotKey(pending.snapshot) ? note.detail : undefined,
+      };
+    }
+    if (result.status === "approved" || result.status === "captured") {
+      return this.presentationForAction(runtime);
+    }
+    const live = this.liveField(runtime);
+    const note = live ? this.notes.get(live.handle) : undefined;
+    if (live && note && note.signature === snapshotKey(snapshotControl(live))) {
+      return {
+        ...base,
+        state: note.state,
+        label: note.label,
+        detail: note.detail,
+      };
+    }
+    const existing = live && !isControlEmpty(live);
+    const remember = existing
+      ? [
+          {
+            label: copy.scanner.rememberExisting,
+            run: () => this.rememberExisting(runtime),
+          },
+        ]
+      : undefined;
+    switch (result.status) {
+      case "confirmation_required":
+        return {
+          ...base,
+          state: "confirmation",
+          label: copy.scanner.confirmBeforeFilling,
+          detail: existing ? copy.scanner.theCurrentValueWasPreserved : undefined,
+          actions: [
+            {
+              label: copy.scanner.confirm,
+              kind: "primary",
+              run: () => void this.confirm(runtime),
+            },
+            ...(remember ?? []),
+          ],
+        };
+      case "conflict":
+        return {
+          ...base,
+          state: "attention",
+          label: copy.scanner.reviewRememberedValues,
+        };
+      case "blocked":
+        return {
+          ...base,
+          state: "attention",
+          label: copy.scanner.notFilledReviewNeeded,
+          detail: result.reason,
+        };
+      case "ignored":
+        return {
+          ...base,
+          state: "ignored",
+          label: copy.scanner.ignoredInJobTracker,
+          detail: result.reason,
+        };
+      case "unresolved":
+        return {
+          ...base,
+          state: "unresolved",
+          label: existing ? copy.scanner.existingValuePreserved : copy.scanner.needsYourAnswer,
+          actions: remember,
+        };
+    }
+  }
+
+  private async confirm(runtime: RuntimeField): Promise<void> {
+    const live = this.liveField(runtime);
+    if (!live || !snapshotsEqual(snapshotControl(live), runtime.expected)) return;
+    const generation = runtime.generation;
+    const scanId = this.id();
+    const request: FormFillResolutionRequest = {
+      application_context_id: this.applicationContextId,
+      scan_id: scanId,
+      page: {
+        platform: "linkedin",
+        platform_id: runtime.platformId,
+        site_scope: SITE_SCOPE,
+        adapter_id: ADAPTER_ID,
+        adapter_version: ADAPTER_VERSION,
+      },
+      fields: [{ ...live.request, user_confirmed: true }],
+    };
+    const response = await this.bridge(request);
+    if (!response.ok || response.result.scan_id !== scanId || generation !== this.generation)
+      return;
+    const result = response.result.results.find(
+      (item) => item.client_field_id === live.request.client_field_id,
+    );
+    if (!result || result.question_id !== runtime.result.question_id) return;
+    const confirmed: RuntimeField = {
+      ...runtime,
+      field: live,
+      identity: fieldIdentityFingerprint(live),
+      expected: snapshotControl(live),
+      result,
+    };
+    this.runtimeFields.set(live.handle, confirmed);
+    this.updatePresentation(live.container, this.resultPresentation(confirmed));
+  }
+
+  private revertActions(handle: string, before: ControlSnapshot): PresentedAction[] | undefined {
+    return isRestorable(before)
+      ? [{ label: copy.scanner.revert, run: () => this.revert(handle) }]
+      : undefined;
+  }
+
+  private revert(handle: string, schedule = true): void {
+    const runtime = this.runtimeFields.get(handle);
+    const owned = this.ownership.get(handle);
+    if (!runtime || !owned || !isRestorable(owned.before)) return;
+    const live = this.liveField(runtime);
+    if (
+      !live ||
+      owned.control !== live.control ||
+      owned.identity !== fieldIdentityFingerprint(live) ||
+      !snapshotsEqual(snapshotControl(live), owned.after)
+    ) {
+      this.ownership.delete(handle);
+      return;
+    }
+    this.writeDepth += 1;
+    let restored = false;
+    try {
+      restored = restoreSnapshot(live, owned.before);
+    } finally {
+      this.writeDepth -= 1;
+    }
+    if (!restored) return;
+    this.ownership.delete(handle);
+    runtime.field = live;
+    runtime.expected = snapshotControl(live);
+    this.suppressedWrites.add(this.writeSuppressionKey(runtime, runtime.expected));
+    this.notes.set(handle, {
+      state: "reverted",
+      label: copy.scanner.jobTrackerFillReverted,
+      signature: snapshotKey(runtime.expected),
+    });
+    if (schedule) this.schedule();
+  }
+
+  private undoAll(): void {
+    for (const handle of [...this.ownership.keys()]) this.revert(handle, false);
+    this.schedule();
+  }
+
+  private rememberExisting(runtime: RuntimeField): void {
+    const live = this.liveField(runtime);
+    if (!live || isControlEmpty(live)) return;
+    this.captures.queue(runtime.root, live, "confirmed_external", true);
+    void this.captures.flush(live.handle);
+    this.schedule();
+  }
+
+  private captureSettled(
+    handle: string,
+    pending: PendingCapture,
+    questionId: string,
+    cleared: boolean,
+    ok: boolean,
+  ): void {
+    const current = this.runtimeFields.get(handle);
+    const live =
+      current &&
+      this.enabled &&
+      this.easyApplyRoot() === current.root &&
+      stepIdentity(current.root) === current.stepKey
+        ? this.livePick(current.root, handle)
+        : null;
+    if (
+      !current ||
+      current.result.question_id !== questionId ||
+      !live ||
+      fieldIdentityFingerprint(live) !== pending.identity ||
+      !snapshotsEqual(snapshotControl(live), pending.snapshot)
+    )
+      return;
+    const signature = snapshotKey(pending.snapshot);
+    this.notes.set(
+      handle,
+      ok
+        ? {
+            state: cleared ? "cleared" : "remembered",
+            label: cleared
+              ? copy.scanner.rememberedValueCleared
+              : copy.scanner.rememberedForThisExactQuestion,
+            signature,
+          }
+        : {
+            state: "failed",
+            label: copy.scanner.couldNotRememberThisValue,
+            detail: copy.scanner.changeThisFieldAgainToRetry,
+            signature,
+          },
+    );
+    this.schedule();
+  }
+
+  private scheduleConditionalRescan(): void {
+    if (this.conditionalTimer) return;
+    this.conditionalTimer = setTimeout(() => {
+      this.conditionalTimer = undefined;
+      void this.scan();
+    }, this.settleMs);
+  }
+
+  async scan(expectedGeneration?: number): Promise<void> {
+    if (!this.enabled) return;
+    const generation = expectedGeneration ?? ++this.generation;
+    if (generation !== this.generation) return;
+    const root = this.easyApplyRoot();
+    if (!root) {
+      clearPresentation(this.doc);
+      return;
+    }
+    clearLinkedInFollowCompanyDefault(root, this.handledFollowCompanyControls);
+    if (this.easyApplyRoot() !== root) {
+      this.schedule();
+      return;
+    }
+
+    const discovered = discoverLinkedInFields(root);
+    const currentStep = stepIdentity(root);
+    const currentProgress = progressValue(root);
+    if (this.stepKey && currentStep !== this.stepKey) {
+      const advanced =
+        this.stepProgress !== null &&
+        currentProgress !== null &&
+        currentProgress > this.stepProgress;
+      await this.captures.flushOutgoing(this.stepKey, advanced);
+    }
+    const supported = discovered.filter(
+      (field): field is SupportedField => field.kind === "supported",
+    );
+    const manual = discovered.filter((field): field is ManualField => field.kind === "manual");
+    if (currentStep !== this.stepKey) {
+      this.stepKey = currentStep;
+      this.stepProgress = currentProgress;
+      this.baselineHandles = new Set(supported.map((field) => field.handle));
+      this.conditionalIdentities.clear();
+      this.runtimeFields.clear();
+    } else {
+      const presentHandles = new Set(supported.map((field) => field.handle));
+      let needsRescan = false;
+      for (const field of supported.splice(0, supported.length)) {
+        if (this.baselineHandles.has(field.handle)) supported.push(field);
+        else {
+          const identity = fieldIdentityFingerprint(field);
+          if (this.conditionalIdentities.get(field.handle) === identity) {
+            this.baselineHandles.add(field.handle);
+            this.conditionalIdentities.delete(field.handle);
+            supported.push(field);
+          } else {
+            this.conditionalIdentities.set(field.handle, identity);
+            needsRescan = true;
+            manual.push({
+              kind: "manual",
+              container: field.container,
+              handle: field.handle,
+              prompt: field.request.prompt,
+              reason: copy.scanner.waitingForThisNewQuestionToFinishRendering,
+            });
+          }
+        }
+      }
+      for (const handle of [...this.conditionalIdentities.keys()]) {
+        if (!presentHandles.has(handle)) this.conditionalIdentities.delete(handle);
+      }
+      if (needsRescan) this.scheduleConditionalRescan();
+    }
+
+    for (const field of supported) {
+      const owned = this.ownership.get(field.handle);
+      if (
+        owned &&
+        owned.control === field.control &&
+        owned.identity === fieldIdentityFingerprint(field) &&
+        snapshotsEqual(snapshotControl(field), owned.after) &&
+        validationEvidence(field) === "error"
+      ) {
+        this.notes.set(field.handle, {
+          state: "failed",
+          label: copy.scanner.filledValueNeedsAttention,
+          detail: copy.scanner.theHostReportedAValidationErrorJobTrackerWill,
+          signature: snapshotKey(owned.after),
+        });
+      }
+    }
+
+    const platformId = linkedInPlatformId(this.doc, discovered);
+    if (!platformId || supported.length === 0) {
+      if (!platformId) {
+        for (const field of supported.splice(0, supported.length)) {
+          manual.push({
+            kind: "manual",
+            container: field.container,
+            handle: field.handle,
+            prompt: field.request.prompt,
+            reason: copy.scanner.jobTrackerCouldNotIdentifyThisJobSafely,
+          });
+        }
+      }
+      this.renderedRoot = root;
+      this.renderedFields = manual.map((field, index) =>
+        manualPresentation(field, `manual-${index + 1}`),
+      );
+      this.renderCurrent();
+      return;
+    }
+
+    const fingerprints = new Map(supported.map((field) => [field.handle, fieldFingerprint(field)]));
+    const identities = new Map(
+      supported.map((field) => [field.handle, fieldIdentityFingerprint(field)]),
+    );
+    const snapshots = new Map(supported.map((field) => [field.handle, snapshotControl(field)]));
+    const scanId = this.id();
+    const request: FormFillResolutionRequest = {
+      application_context_id: this.applicationContextId,
+      scan_id: scanId,
+      page: {
+        platform: "linkedin",
+        platform_id: platformId,
+        site_scope: SITE_SCOPE,
+        adapter_id: ADAPTER_ID,
+        adapter_version: ADAPTER_VERSION,
+      },
+      fields: supported.map((field) => field.request),
+    };
+    const response = await this.bridge(request);
+    if (generation !== this.generation || !this.enabled) return;
+
+    const liveRoot = this.easyApplyRoot();
+    if (!liveRoot || liveRoot !== root || stepIdentity(root) !== currentStep) return;
+    const live = discoverLinkedInFields(root);
+    const liveSupported = new Map(
+      live
+        .filter((field): field is SupportedField => field.kind === "supported")
+        .map((field) => [field.handle, field]),
+    );
+    const settled = supported
+      .map((field) => liveSupported.get(field.handle))
+      .filter(
+        (field): field is SupportedField =>
+          !!field &&
+          fieldFingerprint(field) === fingerprints.get(field.handle) &&
+          fieldIdentityFingerprint(field) === identities.get(field.handle) &&
+          snapshotsEqual(snapshotControl(field), snapshots.get(field.handle)!),
+      );
+    this.renderedRoot = root;
+    if (!response.ok || response.result.scan_id !== scanId) {
+      this.renderedFields = [
+        ...settled.map((field) => ({
+          clientFieldId: field.request.client_field_id,
+          container: field.container,
+          prompt: field.request.prompt,
+          state: "error" as const,
+          label: copy.scanner.couldNotCheckThisField,
+          detail: copy.scanner.existingValuesWereLeftUntouched,
+        })),
+        ...manual.map((field, index) => manualPresentation(field, `manual-${index + 1}`)),
+      ];
+      this.renderCurrent();
+      return;
+    }
+
+    const results = new Map(
+      response.result.results.map((result) => [result.client_field_id, result]),
+    );
+    const presentations: PresentedField[] = [];
+    for (const field of settled) {
+      const result = results.get(field.request.client_field_id);
+      if (!result) {
+        presentations.push({
+          clientFieldId: field.request.client_field_id,
+          container: field.container,
+          prompt: field.request.prompt,
+          state: "error",
+          label: copy.scanner.couldNotCheckThisField,
+          detail: copy.scanner.existingValuesWereLeftUntouched,
+        });
+        continue;
+      }
+      const runtime: RuntimeField = {
+        field,
+        identity: fieldIdentityFingerprint(field),
+        expected: snapshotControl(field),
+        result,
+        generation,
+        root,
+        stepKey: currentStep,
+        platformId,
+      };
+      this.runtimeFields.set(field.handle, runtime);
+      presentations.push(this.resultPresentation(runtime));
+      void this.captures.flush(field.handle);
+    }
+    presentations.push(
+      ...manual.map((field, index) => manualPresentation(field, `manual-${index + 1}`)),
+    );
+    presentations.sort((a, b) =>
+      a.container.compareDocumentPosition(b.container) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    );
+    this.renderedFields = presentations;
+    this.renderCurrent();
+  }
+}
+
+export function startEasyApplyFormFill(doc: Document = document): EasyApplyScanner {
+  const scanner = new EasyApplyScanner(doc);
+  onServerChanged(() => scanner.resetServer());
+  onPreferencesChanged((state) => scanner.setEnabled(state?.settings.easy_apply_enabled ?? false));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes[EASY_APPLY_SUMMARY_OPEN_KEY]) {
+      const value = changes[EASY_APPLY_SUMMARY_OPEN_KEY].newValue;
+      scanner.setSummaryOpenPreference(typeof value === "boolean" ? value : undefined);
+    }
+  });
+  loadEasyApplySummaryOpen((open) => {
+    scanner.initializeSummaryOpenPreference(open);
+    loadEasyApplyEnabled((enabled) => scanner.setEnabled(enabled));
+  });
+  return scanner;
+}

@@ -1,0 +1,85 @@
+name: Container
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing canonical release tag to publish
+        required: true
+        type: string
+      update_latest:
+        description: Move latest to this tag; use only for the current stable release
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+      - run: docker compose config -q
+      - run: bash scripts/test-container.sh
+
+  publish:
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || github.event_name == 'workflow_dispatch'
+    needs: smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+      - name: Verify canonical tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$RELEASE_TAG" == "v$VERSION" ]]
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish Linux/amd64 image
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          UPDATE_LATEST: ${{ github.event_name == 'push' || inputs.update_latest }}
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          python3 scripts/build-metadata.py --require-release --format shell > "$RUNNER_TEMP/identity.env"
+          source "$RUNNER_TEMP/identity.env"
+          TAGS=(
+            --tag "$IMAGE:$TAG"
+            --tag "$IMAGE:sha-$SOURCE_SHA"
+          )
+          if [[ "$UPDATE_LATEST" == "true" ]]; then
+            TAGS+=(--tag "$IMAGE:latest")
+          fi
+          docker buildx build --platform linux/amd64 --pull --push \
+            --build-arg "APP_REVISION=$APP_REVISION" \
+            --build-arg "APP_COMMIT_TIME=$APP_COMMIT_TIME" \
+            --build-arg "APP_BUILD_TIME=$APP_BUILD_TIME" \
+            --build-arg "APP_IDENTITY_ATTESTED=$APP_IDENTITY_ATTESTED" \
+            --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-315532800}" \
+            "${TAGS[@]}" \
+            .

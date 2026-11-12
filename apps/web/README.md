@@ -1,0 +1,149 @@
+# Job Tracker dashboard
+
+The dashboard is the React client for Job Tracker. For installation and normal use, follow the [root README](../../README.md).
+
+## Development
+
+Complete the [workspace setup](../../docs/DEVELOPMENT.md#local-development), then start the API in one terminal using its [direct-run command](../api/README.md#run-the-api-directly).
+
+Start the Vite development server from the repository root in another:
+
+```bash
+pnpm run dev:web
+```
+
+Open <http://localhost:5173>. Vite proxies `/api`, `/docs`, `/openapi.json`, and `/version.json` to the API on port 3456. A production build is emitted to `apps/web/dist`; FastAPI serves that directory at <http://localhost:3456> and requires the SPA entry document to revalidate so rebuilds load the current asset hashes.
+
+Run the dashboard tests and checks from the repository root:
+
+```bash
+pnpm exec vp run -F web test
+pnpm exec vp run -F web typecheck
+pnpm run build:web
+```
+
+## Source ownership
+
+`src/main.tsx` bootstraps the dashboard. Source owners are:
+
+| Path | Responsibility |
+| --- | --- |
+| `src/app/` | Workspaces, navigation, global shortcuts, build checks, and application dialogs |
+| `src/features/` | Jobs, Documents, Blocked companies, Extension settings, and Form Fill |
+| Feature `client.ts` | Endpoint adapters |
+| Feature `queries.ts` | Query keys/options, mutations, polling, invalidation, and cache cleanup |
+| `src/infra/http.ts` | Shared HTTP transport bound to `/api` |
+| `src/shared/` | Reusable UI, browser hooks, and pure utilities with no feature owner |
+| `src/platforms/` | Platform metadata and the [private-overlay discovery path](../../docs/PRIVATE.md#overlay-locations) |
+
+Feature code does not import the application shell; shared code and transport do not import features. `src/app/sourceBoundaries.test.ts` enforces these directions for public production imports, re-exports, import types, and literal dynamic imports. Platform metadata remains a lower integration surface; its private discovery stays intact and installed overlay files are excluded from this source check. Documents invalidate the Jobs detail key after writes.
+
+The shared transport reads failed response bodies once. `ApiError` parses the standard envelope into code, safe message, request ID, details, and validation issues; legacy server bodies retain their existing parsing and raw message fallback. Shared UI maps known codes to local messages. Form Fill projects `details.current` for standard conflicts and retains the legacy `detail ?? payload` fallback, then creates a feature error with safe global wording, code/request ID, and no transport payload or private details.
+
+Each owner keeps typed UI text and complete count/grammar functions in `copy.ts`; shortcut help belongs to the application shell. User-authored data and protocol values stay separate from display copy. `shared/format.ts` centralizes browser-local date/time display, preserving the browser's locale and time zone and the Form Fill invalid-date fallback. Protocol timestamps and build identity are separate from display formatting.
+
+### Drafts and review helpers
+
+Form Fill keeps draft/value and request construction in `answerDraft.ts` and `captureDraft.ts`. `useQuestionDraft.ts` and `useCaptureDraft.ts` own their drawer's in-memory fields, initial baseline, query snapshots, approval fingerprint, binding suggestions, review scrolling, and private-detail lifetime. Pure eligibility and revision fingerprints live in `questionReview.ts` and `captureReview.ts`; selected and current Answer revisions remain distinct. `usePrivateAnswers.ts` tracks every opened Answer detail for cleanup. Background refresh does not replace the draft base or approve changed context.
+
+`AnswerDrawer.tsx` keeps Answer drafts, base revisions, and named save actions; `answerDraft.ts` builds shared payload fields, while `AnswerDrawerTitle.tsx` and `AnswerDrawerFooter.tsx` render its name editor and save controls without owning drafts.
+
+`useQuestionActions.ts` owns Match/Question/conflict mutations; `useCaptureActions.ts` owns Capture apply/status mutations. They retain revision guards, mutation order, safe announcements, and close/advance outcomes. Each drawer visibly composes its loading state, dirty guard, conflict reconciliation, history, and named panels. Question panels separate remembered values, Answer selection/change review, management/details, and footer actions. Capture panels separate the remembered value, change review, action/Answer selection, new-Answer metadata, and footer actions; source and management disclosures stay beside their parent flow. Panels receive explicit typed fields and callbacks, add no DOM wrappers, and own no draft state. The [editing/review](#editing-and-review) and [private client state](#private-client-state) sections own reconciliation and retention rules.
+
+## Installable app
+
+Production builds include a PWA manifest, app icons, and a Workbox service worker through `vite-plugin-pwa`. Use the browser's **Install app** or **Add to Home Screen** action on HTTPS or localhost; plain HTTP on a remote host cannot register the worker. Installation keeps the existing server and database. The app shell can reopen offline, but reads and writes still need the server.
+
+`src/sw.ts` fetches entry documents from the network first, falling back to the precached canonical shell only on network failure. Only build assets are precached. `/version.json` is excluded from precache and runtime routes; API responses, external requests, and navigation query strings are never stored by the worker. Updates activate after existing app tabs/windows close; reopening gets the current build. Vite development does not register a worker. Test the built app with `pnpm --filter web exec vp preview` and DevTools' Application and offline controls.
+
+`public/app-icon.svg` owns the PWA icon artwork. Regenerate its tracked PNG variants with `rsvg-convert`:
+
+```bash
+rsvg-convert -w 192 -h 192 -o apps/web/public/pwa-192.png apps/web/public/app-icon.svg
+rsvg-convert -w 512 -h 512 -o apps/web/public/pwa-512.png apps/web/public/app-icon.svg
+rsvg-convert -w 180 -h 180 -o apps/web/public/apple-touch-icon.png apps/web/public/app-icon.svg
+```
+
+## Job drawer
+
+The header separates Title/Close from Company/Edit and Star/Hide/Copy. Phone field inputs stack, disclosure targets grow, and Add job scrolls within short viewports.
+
+Listings, Custom fields, Documents, and Timeline start expanded and show counts. `jt.collapsedJobSections` stores only collapsed section keys, shared across jobs. Collapsing hides mounted content and preserves drafts; Add expands its section, and attention-driven Add note expands Timeline before focusing the composer. `CollapsibleSection` and `SectionHeader` share disclosure/add controls; the drawer owns persistence.
+
+Listing details show compact amber `Unavailable <date>` or red `Closed <date>` labels independently of job status. Original notices and precise observation times appear on hover, focus, or tap; Open and Unknown add no label. Board cards display one undated label from the API's job-level `availability`: amber Unavailable or red Closed; Open and Unknown add no label. The [API guide](../api/README.md#listing-availability) owns the aggregation rule. Unavailable dates are observation dates; closure dates remain the first observed closure until reopening.
+
+## Application header
+
+Jobs and Form Fill share search/count, filters, and order controls, including 38px sizing, keyboard focus, and narrow-screen wrapping. Desktop Add/Refresh sit beside the app name. Manual refresh disables repeat clicks, shows progress, and reports success or failure in a toast. On phones they move into the burger menu after workspace navigation; the current workspace is marked and disabled. Search/filter/order remain together below branding. Menu arrow and Tab navigation use visible, enabled controls; Escape restores the menu trigger. Collapsed drawer content stays outside focus-trap boundaries.
+
+The funnel highlights changed filters or display options. Jobs groups attention, starred, Easy Apply, listing availability, hidden, and blocked-company filters, with A/S/E/H/B shortcuts and attention count. Clear filters empties search and restores collection defaults while preserving order. Workspace, collection, filter, order, and display preferences persist locally; explicit URL state wins, and extension job links open Jobs. Search text and drafts are not stored.
+
+Under Show only, checkbox labels omit “only”; a separate Listing group places “Listing:” beside an All / Unavailable / Closed dropdown. Each narrowed choice requires at least one matching listing, even when another listing is open or the card warning is suppressed. The choices combine with other filters, persist as `jt.listingAvailability`, use the `listing_availability` URL parameter, and reset with Clear filters.
+
+## Extension settings
+
+The burger menu groups workspace actions, Blocked companies, Extension settings with Theme, then Keyboard shortcuts and About last. **Extension settings** manages the server's Easy Apply switch, filtered-job Dim/Hide mode, diagnostic scope/expiry, description highlights, and title rules from either workspace. Browsing controls sit beside their labels. Description highlights and Keyword actions have explanation tooltips beside their titles. Description highlights, Keyword actions, and Search diagnostics start collapsed; folding them preserves unsaved edits.
+
+Browsing controls have no section title, and rule rows show “If title … any of these, then …” with alphabetically sorted keyword chips below, and open editing without a pen icon. Keyword fields wrap removable chips and accept Enter, comma, or pasted lists; pending text participates in saving and unsaved-change guards. Buttons use accent text or a filled primary style, distinct from bordered input fields.
+
+The extension's **Manage keyword highlights and rules ↗** link opens `/?view=jobs&settings=extension`, showing the dialog immediately; closing it removes the settings parameter. The popup keeps quick switches and the management link; all highlight and rule controls stay here. Search diagnostics explains captured data in a tooltip and offers the web-only **Clear stored data** action. Clearing confirms first, reports progress and success/failure, and neither saves nor discards preference drafts.
+
+Creating or editing a rule replaces the entire dialog content with its editor. **Apply rule** stages a valid changed rule and returns to settings; **Cancel editing** discards that rule draft. **Save settings** persists all staged settings together and requires a valid change.
+
+The dialog keeps its initial revision and draft across background refreshes. Conflicts preserve edits and offer explicit reload with discard confirmation. Closing confirms unsaved changes; reload/tab closure uses the native warning. Drafts remain in memory, detail queries leave the cache when closed, and settings requests use `no-store`. Explicit reload shows progress and a success or failure toast. Empty or disabled highlights stay as saved; the dashboard does not restore defaults.
+
+## About and build checks
+
+**About** is available only in the burger menu in both workspaces. Its dialog shows the compiled running version, revision, commit/build times in UTC, and verified or development state. The server identity is checked on startup, visible window focus, return from a hidden tab, and Check again/Retry. A fixed `/version.json` request uses `no-store`, omits credentials and referrers, rejects redirects, validates the public identity schema, and bounds the request and body read to five seconds. Failure stays visible in About and never claims the running build is current.
+
+A different identity exposes the server build and Reload; reload is always explicit and retains unsaved-draft confirmation and the native unload warning. Verified revisions produce one update notice per revision; `jt.buildNotices.v1` stores only validated public revision IDs, with an in-memory fallback if storage is unavailable. No development notice is emitted: identical dev metadata cannot prove identical source. About uses the existing modal focus trap, restores the burger trigger, and suppresses application shortcuts while open. The service worker additionally filters the identity endpoint from injected precache entries; no runtime route handles it.
+
+## Form Fill workspace
+
+The [feature guide](../../docs/FEATURES.md#fill-supported-easy-apply-questions) owns the user workflow; [architecture](../../docs/ARCHITECTURE.md#form-fill-knowledge) owns identities and lifecycle. The following dashboard rules govern presentation and client state.
+
+### Collections and controls
+
+Form Fill scrolls below the fixed application header with a viewport-edge scrollbar and centered content. `CollectionToolbar` portals each list's search/filter/order controls into the header host. Collection tabs stay below it; accessible region names replace repeated visible headings. Navigation/control help appears on hover or keyboard focus. Action tooltips ignore touch; values, validation, review summaries, and clearing warnings stay visible.
+
+Review inbox has one row per exact Question needing a Match or holding a current Capture, including differing Captures on active Matches. It excludes muted Questions by default and refreshes every two seconds while visible. Search covers prompt/section/help. Independent Matched and Dismissed filters include settled and muted Questions even from an empty inbox. Show question details reveals context/choice counts; Show source details reveals source/frequency. Saved answers defaults to active Answers, with a separate paused filter/style. Show details reveals description, type, question count, and badges. Every Show… checkbox defaults off; Clear filters resets display choices too.
+
+Both lists default to Most recent and order all pages on the server. Answer order uses update time, all-Match count, or A–Z; Question order uses last-seen time, observation count, or A–Z. Menus place Most recent first, count order second, and A–Z last; changing order resets pagination. Loaded counts show + while more pages exist and distinguish loading/failure from zero. Main lists prefetch near Load more without revealing rows until requested; that control appears only with another page.
+
+Filter panels close on Escape, outside click, or focus leaving; Escape restores funnel focus. Add/order controls have accessible names and tooltips; order uses the Jobs keyboard menu. New answer sits beside the app name on desktop and in the phone menu.
+
+### Answer selection
+
+The Question drawer exposes the chooser directly. The Question-scoped [candidate endpoint](../api/README.md#form-fill-knowledge) ranks structurally compatible suggestions before pagination and returns short private value previews. Rows show name/preview with separators and omit repeated descriptions, type/count badges, policy, and usage. Search matching existing answers broadens candidates within compatible type/active-option count; + creates an Answer. Empty suggestions invite search or creation.
+
+The picker loads more near its scroll end, keeps loading/Retry inside the scroller, and retains rows on failure. Without intersection observation, a manual control remains. Selection replaces search/results with the chosen card; its cancel icon returns to results. Choosing fetches full detail for value, policy, and bindings. Candidate queries run only while choosing, retain server order, and discard inactive previews when the picker closes. Drawer searches remain local. Choices resolve through Question options or Answer vocabulary; missing labels read unavailable rather than exposing IDs.
+
+### Editing and review
+
+Drawers use the Question prompt or Answer name as their title and put values before collapsed source, details, management, and activity. Secondary headings/labels stay muted and consistently spaced; value text remains prominent. Contextual and existing values keep accessible labels without repeated visible labels; blank standalone fields keep visible labels. Fixed types appear as metadata and fixed choice labels as selectable text. Long choices use a plain disclosure with an accessible group name.
+
+New Answers default to Automatic filling. Answer details groups value type, fill behavior, Stable key, and Description; existing fill settings live under Manage answer with policy/paused state in its heading. Contextual names/descriptions/identifiers/usage start collapsed; automatic keys track the name until customized. Stable-key and incomplete-save guidance lives in tooltips. The pencil edits an existing Answer's title as part of the value draft, committed by Save answer.
+
+Question-context creation fixes compatible value type, active choice vocabulary, and one-to-one bindings, then saves Answer/Match atomically. Its header/back arrow returns to the chooser with the unsaved-change guard; standalone creation uses New answer. Question help/requirements live in Question details, or Answer details during contextual creation.
+
+Review shows old/proposed values, filling, affected Questions, and complete bindings. Identical unambiguous labels get editable one-to-one suggestions requiring review. Up to ten choices remain inline; larger sets support search/collapse. Incomplete sets open automatically with an unmatched-only filter; complete long sets/vocabularies start collapsed. Comparison cards follow value controls before settings/details, omit repeated explanations, and retain warnings/provenance. Impact summaries require valid value/choice/fill changes; new-answer summaries require a valid value. Draft or revision changes, including description/policy, invalidate review.
+
+A single remembered value has a primary review action beside the Answer chooser/card. Completion closes both Capture and underlying Question drawers. Save actions remain fixed; success closes the drawer, Save and review next advances the inbox, and failure preserves drafts. Saved-answer/inbox badges share styling. Value cleared badges count dismissed Captures separately from Question status; value-free events appear in Activity history. Legacy Dismissed/combined-filter links map to inbox filters; opaque Capture links open detail. Dismissal removes the value permanently; Match pause/retirement and Question dismissal remain distinct.
+
+Answer drafts keep the snapshot and revision they started from across background refreshes. Reviewing a conflict explicitly updates that base while preserving the draft; discarding replaces both. Match and Capture review approve the exact draft and Answer, Question, Match, current-Answer, and Capture revisions; a changed context requires review again for scalar and choice Questions. Capture review waits for agreeing Question/Match snapshots and current Capture/Answer details. Reactivating a paused or removed Match is shown in its change review.
+
+All mutations use expected revisions. A 409 keeps the draft and offers review/copy/discard without automatic retry. Applying a Capture explicitly creates, updates, retargets, or rebinds; Match-only saving consumes one identical non-conflicting Capture and leaves differing values pending. Conflict resolution requires a winner from the complete current set.
+
+### Private client state
+
+Close, internal navigation, and browser history confirm before discarding unsaved edits; reload/tab closure uses the native warning. Drafts remain in memory. Form-fill collections and presence polls receive value-free summaries; full details, candidate previews, and resolution actions are intentional private responses. URLs/history contain only enum view state, opaque resource IDs, filters, and cursors. Prompts/values never enter them, success toasts, or global errors. Detail/candidate caches are removed when drawers close.
+
+## Notifications and reminders
+
+The header bell opens the shared inbox, ordered unread first and newest first within each group, and a Scheduled tab containing only user-created reminders. Its icon-only **Add reminder** action creates a tracker reminder; a short note directs users to a job drawer for linked reminders. The drawer’s standard collapsible **Reminders** section sits between Documents and Timeline, with count and add controls, help in a header tooltip and a blank body when empty. It lists only user-created reminders; automatic stale alerts appear in the global notification views. Reminder and alert cards use the drawer’s existing bordered surfaces, compact title/time rows, icon actions and expandable details. Clicking a linked card in the inbox or Scheduled tab opens its job; its actions and expanded-content controls remain independent. Scheduled manual reminders support revision-checked editing/cancellation. Forms accept a title, local date/time and optional details, display the browser timezone and submit UTC.
+
+**Settings → Stale applications** controls day thresholds only. Badges follow thresholds independently of notification modes. **Settings → Notifications** controls the daily stale alert time (09:00 by default), independent Applied/In process modes (On, Muted, Off), shared **Mute all notifications** and device-specific **Browser notifications**. The most recently active dashboard automatically reports its browser’s IANA timezone on opening, focus or foregrounding; no timezone picker is shown. Background dashboards cannot change it. The server retains that zone for scheduling while the app is closed. Both sections use the existing collapsed settings pattern. Notification rows share aligned control widths and input styles; explanatory text and the detected timezone live in tooltips. Muting preserves unread inbox items and suppresses native popups/in-app toasts without replaying them on unmute.
+
+`features/notifications/` owns API/query adapters, reminder/inbox UI and the single SSE stream. Normal fetching never presents popups. SSE alerts use permitted native notifications or in-app toasts. **Allow** requests permission only while the browser has no saved decision; **Enable** registers Web Push when permission is already granted, enabling closed-app delivery on supported browsers; HTTPS is required outside localhost, and iOS/iPadOS requires a Home Screen web app. Blocked permission shows a read-only status with browser-settings guidance; no action claims it can reopen the prompt. Enabled devices can unsubscribe with **Turn off**. Browser registration and HTTP requests have bounded waits and visible errors. The service worker verifies current publication state before showing queued pushes, then acknowledges handling separately from reading. IndexedDB retains at most 256 opaque publication identities, shared by the page and service worker, without notification content.
+
+Reconnect refreshes the inbox and recovers unacknowledged publications without event-history replay or polling. Reminder drafts protect unsaved changes and retain their revision. App shortcuts yield to open dialogs. Push clicks open the linked drawer or general inbox.
