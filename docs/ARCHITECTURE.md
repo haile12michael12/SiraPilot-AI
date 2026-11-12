@@ -265,7 +265,7 @@ The local-first scheduler never discards a failed push. Local data remains on di
 
 ## Dashboard architecture
 
-`src/main.tsx` bootstraps React; `src/app/` composes workspaces, navigation, global shortcuts, application dialogs, and app-wide state in `src/app/stores/`. Each `src/features/<feature>/` owner keeps its components, endpoint adapters, query keys/options, mutations, and cache lifecycle together. Generic same-origin transport lives in `src/infra/`; reusable ownerless components belong in `src/shared/components/` or `src/shared/ui/`, and pure utilities belong in `src/shared/lib/`. Features do not import the application shell, and shared code/transport do not import features.
+`src/main.tsx` bootstraps React; `src/app/` composes workspaces, navigation, global shortcuts, and application dialogs. Each `src/features/` owner keeps its components, endpoint adapter, query keys/options, mutations, and cache lifecycle together. Generic same-origin transport lives in `src/infra/`; reusable UI and browser utilities without a feature owner live in `src/shared/`. Features do not import the application shell, and shared code/transport do not import features.
 
 Drawers own their drafts and starting revisions. Pure request/review helpers describe the exact context being approved; background refresh cannot replace that base or silently approve changed context. Private Form Fill details and candidate previews are temporary drawer data, removed from query caches on close/unmount. Collections remain value-free. The [dashboard guide](../apps/web/README.md#source-ownership) owns the detailed source map and [client-state rules](../apps/web/README.md#private-client-state).
 
