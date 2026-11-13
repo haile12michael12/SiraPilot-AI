@@ -8,8 +8,9 @@ Create Date: 2026-11-13
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0001_postgres_foundation"
 down_revision: str | None = None
@@ -18,6 +19,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    existing_tables = set(sa.inspect(op.get_bind()).get_table_names())
+    existing_tables.discard("alembic_version")
+    if existing_tables:
+        raise RuntimeError(
+            "The initial PostgreSQL migration requires an empty schema; "
+            "existing tables were left unchanged."
+        )
+
     op.create_table(
         "accounts",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),

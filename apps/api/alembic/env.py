@@ -1,7 +1,8 @@
-from alembic import context
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection
 from sqlalchemy.pool import NullPool
+
+from alembic import context
 
 from app.infra.postgres.config import PostgresSettings
 from app.infra.postgres.models import Base

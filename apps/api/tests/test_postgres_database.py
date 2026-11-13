@@ -7,15 +7,15 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from alembic import command
-from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine, make_url
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import NullPool
 
+from alembic import command
+from alembic.config import Config
+
 from app.infra.postgres.config import PostgresSettings, load_postgres_settings
-from app.infra.postgres.models import Account, Job
+from app.infra.postgres.models import Account
 from app.infra.postgres.repositories import JobRepository
 from app.infra.postgres.sessions import PostgresDatabase
 
@@ -139,11 +139,40 @@ def test_alembic_upgrade_is_repeatable_and_creates_justified_indexes(
 
 @pytest.mark.postgres
 def test_alembic_downgrade_refuses_to_drop_postgres_data(postgres_engine: Engine) -> None:
-    with pytest.raises(RuntimeError, match="forward-only"):
-        with postgres_engine.connect() as connection:
-            command.downgrade(_alembic_config(connection), "base")
+    with (
+        pytest.raises(RuntimeError, match="forward-only"),
+        postgres_engine.connect() as connection,
+    ):
+        command.downgrade(_alembic_config(connection), "base")
 
     assert "jobs" in inspect(postgres_engine).get_table_names()
+
+
+@pytest.mark.postgres
+def test_initial_migration_refuses_a_nonempty_schema_without_changing_records(
+    postgres_engine: Engine,
+) -> None:
+    schema = f"test_existing_{uuid4().hex}"
+    with postgres_engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+
+    schema_url = postgres_engine.url.set(query={"options": f"-csearch_path={schema}"})
+    existing_engine = create_engine(schema_url, poolclass=NullPool)
+    try:
+        with existing_engine.begin() as connection:
+            connection.execute(text("CREATE TABLE existing_records (value TEXT NOT NULL)"))
+            connection.execute(text("INSERT INTO existing_records VALUES ('preserved')"))
+
+        with pytest.raises(RuntimeError, match="requires an empty schema"):
+            _upgrade(existing_engine)
+
+        with existing_engine.connect() as connection:
+            assert connection.scalar(text("SELECT value FROM existing_records")) == "preserved"
+            assert "accounts" not in inspect(connection).get_table_names()
+    finally:
+        existing_engine.dispose()
+        with postgres_engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
 
 
 @pytest.mark.postgres
@@ -162,12 +191,14 @@ def test_job_repository_scopes_reads_and_transactions_rollback(
         assert JobRepository(session, first_account).get(job_id) is not None
         assert JobRepository(session, other_account).get(job_id) is None
 
-    with pytest.raises(RuntimeError, match="rollback probe"):
-        with postgres_database.transaction() as session:
-            JobRepository(session, first_account).create(
-                title="Uncommitted role", company="Example employer"
-            )
-            raise RuntimeError("rollback probe")
+    with (
+        pytest.raises(RuntimeError, match="rollback probe"),
+        postgres_database.transaction() as session,
+    ):
+        JobRepository(session, first_account).create(
+            title="Uncommitted role", company="Example employer"
+        )
+        raise RuntimeError("rollback probe")
 
     with postgres_database.session() as session:
         assert [job.title for job in JobRepository(session, first_account).list_recent()] == [

@@ -306,7 +306,7 @@ This is not a supported public-internet authentication model. If the service is 
 
 The PostgreSQL layer is separate from the running SQLite/libSQL/Turso application. It contains account-scoped SQLAlchemy models, a session/transaction manager, a job repository, and an Alembic baseline. It has no authentication endpoints, does not import existing data, and is never initialized at API startup. Setting `POSTGRES_DATABASE_URL` does not switch the current API away from `DB_PATH` or Turso.
 
-Use an explicitly provisioned PostgreSQL database for this target. The URL must use the `postgresql+psycopg://` driver and should be supplied through a secret manager or protected process environment, not committed to `.env` files or source control. The Alembic baseline only creates its target tables and indexes; it does not change SQLite/Turso records.
+Use a newly provisioned, empty PostgreSQL schema for this target. The initial migration refuses a schema containing existing tables. The URL must use the `postgresql+psycopg://` driver and should be supplied through a secret manager or protected process environment, not committed to `.env` files or source control. The Alembic baseline only creates its target tables and indexes; it does not change SQLite/Turso records.
 
 ```bash
 cd apps/api
@@ -316,7 +316,7 @@ uv run alembic upgrade head
 
 Migrations are forward-only. Do not use `alembic downgrade` as rollback; restore a verified PostgreSQL backup to a separate database instead. Do not point Alembic at the current SQLite/Turso database. PostgreSQL integration tests require `POSTGRES_TEST_URL` to reference a loopback database whose name ends in `_test`; they create and remove only a uniquely named test schema there.
 
-See the [PostgreSQL schema](../../docs/database/DATABASE_SCHEMA.md), [migration strategy](../../docs/database/MIGRATION_STRATEGY.md), and [backup procedures](../../docs/database/MIGRATION_STRATEGY.md#backup-and-restore).
+See the [PostgreSQL schema](../../docs/database/DATABASE_SCHEMA.md), [migration strategy](../../docs/database/MIGRATION_STRATEGY.md), and [backup procedures](#postgresql-target-backup--restore).
 
 ### Current SQLite/libSQL/Turso runtime
 

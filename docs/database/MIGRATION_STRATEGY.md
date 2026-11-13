@@ -35,7 +35,7 @@ No live user database, private-overlay file, environment file, or private fixtur
 
 The API remains on the existing SQLite/libSQL runtime until PostgreSQL schema, authentication, import, and client changes pass the full test and release gates. Cutover requires a major version, a tested one-time import, an explicit backup, and a clear point after which writes are directed only to PostgreSQL.
 
-The initial Alembic revision only creates tables and indexes. Migrations are forward-only; do not use `alembic downgrade` as a rollback or run Alembic against the SQLite/Turso database. Take a verified PostgreSQL backup before each production upgrade. The app's SQLite backup/restore commands do not back up or restore PostgreSQL.
+The initial Alembic revision only creates tables and indexes and refuses to run in a schema with existing tables. Migrations are forward-only; do not use `alembic downgrade` as a rollback or run Alembic against the SQLite/Turso database. Take a verified PostgreSQL backup before each production upgrade. The app's SQLite backup/restore commands do not back up or restore PostgreSQL.
 
 Do not attempt bidirectional writes or silent dual-write between SQLite/Turso and PostgreSQL. If cutover validation fails, restore service from the preserved source backup and retry the import into a clean destination; never merge partially imported state by guessing.
 
