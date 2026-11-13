@@ -3,7 +3,7 @@
 This document records the system boundaries and the decisions that are costly to rediscover. The following sources own implementation detail:
 
 - Database columns and constraints: [`apps/api/app/core/schema.sql`](../apps/api/app/core/schema.sql)
-- API paths and payloads: the feature routers under `apps/api/app/modules/` and generated OpenAPI at `/docs`
+- API paths and payloads: feature routers under `apps/api/app/modules/`, composed by `apps/api/app/api/v1/router.py`, and generated OpenAPI at `/docs`
 - Installation, configuration, and maintenance: [`README.md`](../README.md) and [`apps/api/README.md`](../apps/api/README.md)
 - Supported extension adapters: [`apps/extension/README.md`](../apps/extension/README.md)
 
@@ -30,6 +30,8 @@ Each component documents its own internal structure and commands. This map only 
 Job Tracker is a single-user application. FastAPI and the dashboard run on the user's machine; the extension connects to that configured origin. SQLite is the default database. Optional Turso modes provide cross-device synchronization without hosting the API.
 
 The server is designed for localhost, not direct public exposure. Trusted-host checks, a CORS allowlist, and the optional API key reduce accidental access but do not provide user authentication. See [`SECURITY.md`](../SECURITY.md) for the supported threat model.
+
+The approved target is a self-registration, multi-user PostgreSQL service with an explicit legacy-data import. That target is not implemented and must not be exposed as multi-user yet. The [multi-user PostgreSQL ADR](architecture/ADR/0001-multi-user-postgresql.md) and [migration strategy](database/MIGRATION_STRATEGY.md) define the staged transition.
 
 Path selection is a runtime boundary rather than a cwd heuristic. `core.paths` resolves the direct-development, source-checkout, or packaged profile; settings then apply configuration-file values and process overrides against those roots. Root launchers select the source profile explicitly, while the `job-tracker` entry point establishes packaged roots before importing FastAPI, settings, version, or static-resource modules. Version, schema, and dashboard lookup all use the same selected application root.
 

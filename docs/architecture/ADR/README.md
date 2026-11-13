@@ -1,13 +1,7 @@
-﻿# Architecture Decision Records
+# Architecture Decision Records
 
-This document is a placeholder for the architecture decision records section in the project documentation.
+ADRs capture decisions that constrain multiple components or are expensive to reverse.
 
-## Purpose
-
-Index for architecture decision records and rationale.
-
-## Notes
-
-- Add architecture details, decisions, examples, and operational guidance here.
-- Keep this file aligned with the current system implementation and product scope.
-- Update this document as the feature or subsystem evolves.
+| ID | Decision | Status |
+| --- | --- | --- |
+| [0001](0001-multi-user-postgresql.md) | Multi-user PostgreSQL target and explicit legacy-data import | Accepted |

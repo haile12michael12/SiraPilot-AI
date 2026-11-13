@@ -206,6 +206,8 @@ uv run mypy            # strict
 ```text
 app/
 ├── main.py       HTTP composition and app factory
+├── api/          API dependencies and versioned route composition
+│   └── v1/       Current feature routes; mounted under /api for compatibility
 ├── cli.py        delayed-import lifecycle and maintenance commands
 ├── config.py     typed Settings and profile-selected configuration loading
 ├── modules/      business features and explicit application/query owners
