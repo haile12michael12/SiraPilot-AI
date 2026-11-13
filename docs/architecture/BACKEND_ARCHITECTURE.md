@@ -26,7 +26,8 @@ The approved redesign moves toward the following ownership:
 | `app/api/` | Public transport, API versions, and request/response contracts |
 | `app/core/` | Settings, authentication/authorization primitives, errors, logging, and middleware |
 | `app/modules/` | Implemented product capabilities, each with explicit ownership rules |
-| `app/infrastructure/database/` | PostgreSQL sessions, schema, and Alembic migrations |
+| `app/infra/postgres/` | Implemented opt-in PostgreSQL models, sessions, transactions, and repositories |
+| `apps/api/alembic/` | PostgreSQL-only, forward-only Alembic migrations |
 | `app/infrastructure/` | Cache, queue, storage, and telemetry adapters as needed |
 | `app/integrations/` | Browser, email, calendar, job board, and AI provider boundaries |
 | `app/shared/` | Cross-module schemas, enums, constants, and pure utilities |
@@ -43,7 +44,7 @@ The initial account-access choice is self-service registration. Credential forma
 
 ## Persistence and migration
 
-PostgreSQL and Alembic are the selected target for the multi-user service. Existing SQLite/libSQL/Turso operation remains the current behavior until a separately tested migration replaces it. The transition must not mutate a user's live database or infer consent to upload it.
+PostgreSQL and Alembic are the selected target for the multi-user service. An isolated SQLAlchemy foundation and initial account-scoped schema are implemented, but the existing SQLite/libSQL/Turso runtime remains the current behavior. API startup does not create a PostgreSQL connection or run Alembic. A separately tested migration is required before replacing the current runtime; the transition must not mutate a user's live database or infer consent to upload it.
 
 Existing data enters PostgreSQL only through an explicit import from a verified backup/snapshot. The importer must map all records to one selected account, preserve relationships and timestamps, validate foreign keys and counts, and be safely retryable. Full details are in the [migration strategy](../database/MIGRATION_STRATEGY.md).
 

@@ -229,7 +229,7 @@ The shared TypeScript API schema is generated from FastAPI's OpenAPI output. Rep
 | `app/shared/` | Pure reusable rules and helpers with no feature owner |
 | `app/config.py` | Typed settings and configuration loading |
 
-Routers/providers own FastAPI and request-state access. Application operations receive ordinary typed arguments; repositories and feature operations own raw SQL through `infra.database` and its `Conn` protocol. Pydantic models validate boundary and hydrated database data. There is no ORM.
+Routers/providers own FastAPI and request-state access. The current SQLite/libSQL repositories use raw SQL through `infra.database` and its `Conn` protocol; Pydantic models validate boundary and hydrated database data. The separate, opt-in PostgreSQL target uses SQLAlchemy under `infra.postgres` and Alembic under `apps/api/alembic`; the current runtime does not connect to it or apply its migrations.
 
 Business dependencies are acyclic. Job lifecycle owns coordinated merge/relink/delete and listing writes that may relink; Job activity owns events, corrections, reverts, and resulting workflow cleanup; Job queries owns cross-feature read projections. They call small feature-owned operations within the caller's transaction. Lower features do not call back into these application owners. HTTP composition and shared model/schema contracts are distinct from business calls.
 
@@ -248,6 +248,8 @@ The API supports three connection modes:
 - **Local-first:** reads and writes use a local pyturso replica; a background scheduler pushes after a quiet period and periodically pulls remote changes.
 
 All modes initialize the same schema. Foreign-key enforcement is enabled and verified for every connection. `schema.sql` is the 1.0.0 baseline; additive column and one-time data migrations are append-only compatibility layers, including the form-fill foundation migration. Startup applies any registered migration that has no row in the `schema_migrations` ledger; each logical migration and its ledger write commit together, so a failed one rolls back whole and the next start retries it. The rules for adding a migration are in the [development guide](DEVELOPMENT.md#database-migration-compatibility).
+
+The PostgreSQL target is intentionally separate. Its SQLAlchemy models, account-scoped repositories, session transactions, and initial Alembic revision live in `app.infra.postgres` and `apps/api/alembic`. Alembic runs only as an explicit operator command against `POSTGRES_DATABASE_URL`; API startup never applies these migrations. This initial schema establishes account ownership for jobs, listings, events, documents, and blocked companies, but it does not implement authentication or legacy-data import. Existing SQLite/libSQL/Turso files and their migration ledger remain unchanged and continue to be served by the current runtime.
 
 Form Answers and current remembered values are ordinary database rows. Embedded-replica and local-first modes therefore synchronize them to the configured Turso database, and every full database snapshot or automatic recovery backup retains them until that copy is deleted or replaced. Value-free history does not make the current value tables value-free.
 

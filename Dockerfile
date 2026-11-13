@@ -46,9 +46,10 @@ ARG SOURCE_DATE_EPOCH=315532800
 ENV APP_REVISION=$APP_REVISION APP_COMMIT_TIME=$APP_COMMIT_TIME APP_BUILD_TIME=$APP_BUILD_TIME \
     APP_IDENTITY_ATTESTED=$APP_IDENTITY_ATTESTED SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH
 
-COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/README.md ./
+COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/README.md apps/api/alembic.ini ./
 RUN mise exec -- uv sync --python /opt/python/bin/python --frozen --no-dev --no-install-project
 COPY apps/api/app ./app
+COPY apps/api/alembic ./alembic
 RUN mise exec -- uv sync --python /opt/python/bin/python --frozen --no-dev
 COPY VERSION /app/VERSION
 COPY scripts/build-metadata.py scripts/third-party-notices.py /app/scripts/

@@ -211,7 +211,8 @@ app/
 ├── cli.py        delayed-import lifecycle and maintenance commands
 ├── config.py     typed Settings and profile-selected configuration loading
 ├── modules/      business features and explicit application/query owners
-├── infra/        driver-neutral database access, migrations, transactions, sync
+├── infra/        SQLite/libSQL access and the separate PostgreSQL target
+│   └── postgres/ SQLAlchemy models, sessions, transactions, repositories
 ├── platform/     HTTP mechanisms, request dependencies, runtime and logging
 ├── shared/       pure enums, errors, identity, text, time, hashing and similarity
 ├── maintenance/  offline snapshots, restore and checkout adoption
@@ -301,6 +302,24 @@ This is not a supported public-internet authentication model. If the service is 
 
 ## Database
 
+### PostgreSQL target foundation (opt-in)
+
+The PostgreSQL layer is separate from the running SQLite/libSQL/Turso application. It contains account-scoped SQLAlchemy models, a session/transaction manager, a job repository, and an Alembic baseline. It has no authentication endpoints, does not import existing data, and is never initialized at API startup. Setting `POSTGRES_DATABASE_URL` does not switch the current API away from `DB_PATH` or Turso.
+
+Use an explicitly provisioned PostgreSQL database for this target. The URL must use the `postgresql+psycopg://` driver and should be supplied through a secret manager or protected process environment, not committed to `.env` files or source control. The Alembic baseline only creates its target tables and indexes; it does not change SQLite/Turso records.
+
+```bash
+cd apps/api
+export POSTGRES_DATABASE_URL='postgresql+psycopg://...'
+uv run alembic upgrade head
+```
+
+Migrations are forward-only. Do not use `alembic downgrade` as rollback; restore a verified PostgreSQL backup to a separate database instead. Do not point Alembic at the current SQLite/Turso database. PostgreSQL integration tests require `POSTGRES_TEST_URL` to reference a loopback database whose name ends in `_test`; they create and remove only a uniquely named test schema there.
+
+See the [PostgreSQL schema](../../docs/database/DATABASE_SCHEMA.md), [migration strategy](../../docs/database/MIGRATION_STRATEGY.md), and [backup procedures](../../docs/database/MIGRATION_STRATEGY.md#backup-and-restore).
+
+### Current SQLite/libSQL/Turso runtime
+
 Turso settings select the database mode. Startup creates the schema for an empty file.
 
 | Mode | `.env` | Behaviour |
@@ -363,6 +382,31 @@ The command snapshots the checkout's effective local database without copying it
 
 Every database mode, manual snapshot, automatic pre-replacement backup, and pre-pull recovery snapshot includes retained form Answer values and current remembered values. Treat those files and the configured Turso database as private data, and delete each copy separately when removing that data.
 
+### PostgreSQL target backup & restore
+
+The SQLite CLI above does not back up PostgreSQL. Before an Alembic upgrade, take and verify a PostgreSQL custom-format backup. Supply credentials through a protected `.pgpass`/`PGPASSFILE` or deployment secret mechanism; do not put passwords in shell history or command arguments.
+
+```bash
+export PGHOST=localhost
+export PGPORT=5432
+export PGDATABASE=sirapilot
+export PGUSER=sirapilot
+export PGPASSFILE=/safe/path/.pgpass
+pg_dump --format=custom --no-owner --file=/safe/path/sirapilot.dump
+pg_restore --list /safe/path/sirapilot.dump
+```
+
+Restore only into a newly created, empty database. Never use `pg_restore --clean` or overwrite the source database:
+
+```bash
+createdb sirapilot_recovery
+PGDATABASE=sirapilot_recovery pg_restore --exit-on-error --no-owner --dbname=sirapilot_recovery /safe/path/sirapilot.dump
+```
+
+Validate the recovery database before directing any application traffic to it. Keep the original database and backup unchanged until recovery has been verified.
+
 ### Testing against a throwaway DB
 
 Set `APP_ENV=test` to point the app at the disposable `TURSO_TEST_DATABASE_URL` and relocate the local replica under `.test-db/`, so neither prod data nor prod replica files are touched. The same vars back the `turso`-marked integration tests: `uv run pytest -m turso`, which a plain `pytest` skips.
+
+The PostgreSQL schema, transaction, and owner-isolation tests use a separate disposable loopback database. Start an empty test database named with the `_test` suffix, set `POSTGRES_TEST_URL`, and run `uv run pytest -m postgres`. Tests run migrations in a unique schema and remove only that schema; they refuse non-loopback hosts or database names without the suffix.

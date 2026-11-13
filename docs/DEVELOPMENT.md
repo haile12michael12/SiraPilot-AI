@@ -128,6 +128,8 @@ After 1.0.0, migrations are **append-only**:
 
 A change that cannot be expressed additively is a breaking change and needs a major version bump plus an explicit note in `CHANGELOG.md`.
 
+The staged PostgreSQL target is separate from this released SQLite/libSQL ledger. Its Alembic revisions live in `apps/api/alembic/versions/`, run only by an explicit operator command against `POSTGRES_DATABASE_URL`, and never run during API startup. Treat PostgreSQL revisions as append-only and forward-only: test upgrades against a disposable PostgreSQL schema, back up before production upgrades, and use a verified backup restore to a separate database for recovery. Never run these migrations against a SQLite/Turso path.
+
 ## Releases and versions
 
 The repository root `VERSION` file is the one product version, in SemVer. It covers the extension, the dashboard, and the server together — they ship from the same commit and are not independently versioned.

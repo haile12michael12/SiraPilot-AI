@@ -7,6 +7,9 @@ description = "Local FastAPI backend for the personal job tracker"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.141.0",
+    "sqlalchemy>=2.0.45,<3.0.0",
+    "alembic>=1.18.0,<2.0.0",
+    "psycopg[binary]>=3.2.0,<4.0.0",
     "libsql>=0.1.11",
     "pyturso>=0.7.2",
     "pydantic>=2.13.4",
@@ -52,6 +55,7 @@ pythonpath = ["."]
 addopts = "-m 'not turso'"
 markers = [
     "turso: integration test against a real Turso DB (needs TURSO_TEST_* env)",
+    "postgres: integration test against a disposable local PostgreSQL database",
     "wheel: cross-toolchain wheel build that needs the installed pnpm workspace",
 ]
 
