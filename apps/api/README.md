@@ -8,7 +8,7 @@ Local FastAPI backend on **port 3456**, using SQLite by default with optional Tu
 uv run uvicorn app.main:app --host 127.0.0.1 --port 3456 --timeout-graceful-shutdown 15 --reload
 ```
 
-Every feature route is mounted under `/api` (e.g. `POST /api/events`); OpenAPI docs stay unprefixed at <http://localhost:3456/docs>. The schema is created on startup (`jobtracker.db` in this directory by default).
+The versioned API is mounted under `/api/v1` (e.g. `POST /api/v1/events`) and is described in OpenAPI at <http://localhost:3456/docs>. Existing `/api/...` routes remain as compatibility aliases for the dashboard and extension. The schema is created on startup (`jobtracker.db` in this directory by default).
 
 This direct command intentionally keeps cwd-relative `jobtracker.db`, `.env`, and `script-output` defaults. It still acquires `.job-tracker-state/server.lock` before opening the database, so a second direct or wrapped server cannot use the same profile.
 
@@ -63,7 +63,7 @@ The CLI and source launchers give Uvicorn 15 seconds to drain active requests be
 
 ## Dashboard (web UI)
 
-The [dashboard](../web/README.md) uses relative `/api/...` paths in development and production.
+The [dashboard](../web/README.md) and browser extension continue to use relative `/api/...` compatibility paths. New clients should use `/api/v1/...`.
 
 - **Dev** (hot reload): follow the [dashboard development procedure](../web/README.md#development). Vite proxies API requests to this server; keep the API running in a separate terminal.
 - **Prod / one process**: from the repository root, `pnpm run build:web` produces `apps/web/dist`, which FastAPI serves at the root on startup ([app composition](app/main.py) and [static serving](app/platform/http.py)) via `Settings.web_dist_path`. Then the whole thing is just <http://localhost:3456>. The mount is skipped when that directory is absent, so the API still runs without a build.

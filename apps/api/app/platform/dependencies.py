@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import secrets
 from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Annotated, Protocol, cast
 
@@ -97,5 +98,8 @@ def service_factory[S: _Service](service_cls: type[S]) -> Callable[[Conn], S]:
 
 
 def require_api_key(settings: SettingsDep, x_api_key: str | None = Header(default=None)) -> None:
-    if settings.api_key is not None and x_api_key != settings.api_key:
+    if settings.api_key is not None and (
+        x_api_key is None
+        or not secrets.compare_digest(x_api_key, settings.api_key.get_secret_value())
+    ):
         raise HTTPException(status_code=401, detail="missing or invalid X-API-Key")

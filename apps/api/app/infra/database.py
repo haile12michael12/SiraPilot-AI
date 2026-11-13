@@ -134,7 +134,11 @@ def connect(settings: Settings) -> Conn:
         sync_conn = turso.sync.connect(
             f"{settings.db_path}.sync",
             remote_url=settings.turso_database_url,
-            auth_token=settings.turso_auth_token or None,
+            auth_token=(
+                settings.turso_auth_token.get_secret_value()
+                if settings.turso_auth_token is not None
+                else None
+            ),
             bootstrap_if_empty=True,
             # The scheduler owns the 60s cadence; each pull is a snapshot check,
             # not a long-lived listener that may hold the shared database lock.
@@ -148,7 +152,11 @@ def connect(settings: Settings) -> Conn:
         conn = libsql.connect(
             settings.db_path,
             sync_url=settings.turso_database_url,
-            auth_token=settings.turso_auth_token or "",
+            auth_token=(
+                settings.turso_auth_token.get_secret_value()
+                if settings.turso_auth_token is not None
+                else ""
+            ),
             sync_interval=settings.turso_pull_interval_seconds,
             _check_same_thread=False,
         )

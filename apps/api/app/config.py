@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.paths import resolve_paths
@@ -40,11 +40,11 @@ class Settings(BaseSettings):
     web_dist_path: Path | None = None
 
     turso_database_url: str | None = None
-    turso_auth_token: str | None = None
+    turso_auth_token: SecretStr | None = None
 
     # Separate test credentials avoid editing the production database address.
     turso_test_database_url: str | None = None
-    turso_test_auth_token: str | None = None
+    turso_test_auth_token: SecretStr | None = None
 
     # Local-first (pyturso) mode: reads and writes stay local and instant, pushed in
     # the background. False = libSQL embedded replica, where writes write-through.
@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     # auth, matching a purely-localhost personal tool. Neither the dashboard nor the
     # extension sends this header, so enabling it requires a trusted intermediary that
     # injects it, or API scripts that supply it.
-    api_key: str | None = None
+    api_key: SecretStr | None = None
 
     @model_validator(mode="after")
     def _apply_test_env(self) -> Settings:

@@ -36,6 +36,8 @@ class DashboardStaticFiles(StaticFiles):
 
 def _private_path(path: str) -> bool:
     path = path.rstrip("/")
+    if path.startswith("/api/v1/"):
+        path = "/api" + path[len("/api/v1") :]
     return (
         path == "/api/form-fill"
         or path.startswith("/api/form-fill/")

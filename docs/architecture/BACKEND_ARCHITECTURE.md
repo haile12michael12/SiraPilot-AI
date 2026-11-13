@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-The API is a FastAPI application. `app.main` owns application construction and lifespan setup. API authentication and route composition now live in `app.api`; feature routers remain under `app.modules`. The v1 router is mounted at the existing `/api` prefix to preserve dashboard and extension compatibility.
+The API is a FastAPI application. `app.main` owns application construction and lifespan setup. API authentication and route composition live in `app.api`; feature routers remain under `app.modules`. The v1 router is publicly mounted at `/api/v1`. Existing `/api/...` paths remain hidden-from-schema compatibility aliases for the dashboard and extension.
 
 Current code is organized by responsibility:
 
@@ -49,4 +49,4 @@ Existing data enters PostgreSQL only through an explicit import from a verified 
 
 ## API compatibility
 
-`app.api.v1` is an internal route-ownership boundary today; the routes are still served at `/api/...`. Do not add `/api/v1/...` or remove legacy paths as part of a file move. Any public version prefix requires generated-contract updates and coordinated dashboard and extension changes.
+`app.api.v1` is the documented public API at `/api/v1/...`. The unversioned `/api/...` aliases remain available but are omitted from OpenAPI to avoid duplicate contracts. Dashboard and extension clients may migrate separately; remove aliases only in a deliberate breaking release.

@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/blocked-companies": {
+    "/api/v1/blocked-companies": {
         parameters: {
             query?: never;
             header?: never;
@@ -15,20 +15,20 @@ export interface paths {
          * List Blocked
          * @description List blocked companies.
          */
-        get: operations["list_blocked_api_blocked_companies_get"];
+        get: operations["list_blocked_api_v1_blocked_companies_get"];
         put?: never;
         /**
          * Block Company
          * @description Create or refresh a normalized company block.
          */
-        post: operations["block_company_api_blocked_companies_post"];
+        post: operations["block_company_api_v1_blocked_companies_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/blocked-companies/{company_key}": {
+    "/api/v1/blocked-companies/{company_key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -42,13 +42,13 @@ export interface paths {
          * Unblock Company
          * @description Remove one company block in the requested platform scope.
          */
-        delete: operations["unblock_company_api_blocked_companies__company_key__delete"];
+        delete: operations["unblock_company_api_v1_blocked_companies__company_key__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/document-operations": {
+    "/api/v1/document-operations": {
         parameters: {
             query?: never;
             header?: never;
@@ -59,7 +59,7 @@ export interface paths {
          * Get Document Operation
          * @description Look up a durable creation receipt without creating or restoring a document.
          */
-        get: operations["get_document_operation_api_document_operations_get"];
+        get: operations["get_document_operation_api_v1_document_operations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -68,7 +68,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/documents/{document_id}": {
+    "/api/v1/documents/{document_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -79,17 +79,17 @@ export interface paths {
         put?: never;
         post?: never;
         /** Delete Document */
-        delete: operations["delete_document_api_documents__document_id__delete"];
+        delete: operations["delete_document_api_v1_documents__document_id__delete"];
         options?: never;
         head?: never;
         /**
          * Update Document
          * @description Update only the supplied document fields.
          */
-        patch: operations["update_document_api_documents__document_id__patch"];
+        patch: operations["update_document_api_v1_documents__document_id__patch"];
         trace?: never;
     };
-    "/api/event-operations": {
+    "/api/v1/event-operations": {
         parameters: {
             query?: never;
             header?: never;
@@ -100,7 +100,7 @@ export interface paths {
          * Get Event Operation
          * @description Return the original committed result, including completed no-op batches.
          */
-        get: operations["get_event_operation_api_event_operations_get"];
+        get: operations["get_event_operation_api_v1_event_operations_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -109,7 +109,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/events": {
+    "/api/v1/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -123,14 +123,14 @@ export interface paths {
          * @description Submit a state change (status transition or hide/star flag) addressed by
          *     `(platform, platform_id)` or `job_id`; returns the resulting job state.
          */
-        post: operations["create_event_api_events_post"];
+        post: operations["create_event_api_v1_events_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/events/{event_id}": {
+    "/api/v1/events/{event_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -144,17 +144,17 @@ export interface paths {
          * Delete Note Event
          * @description Delete a note; state-changing events require correction or revert.
          */
-        delete: operations["delete_note_event_api_events__event_id__delete"];
+        delete: operations["delete_note_event_api_v1_events__event_id__delete"];
         options?: never;
         head?: never;
         /**
          * Edit Event
          * @description Update an event's metadata and/or timestamp without changing its verb.
          */
-        patch: operations["edit_event_api_events__event_id__patch"];
+        patch: operations["edit_event_api_v1_events__event_id__patch"];
         trace?: never;
     };
-    "/api/form-fill/answers": {
+    "/api/v1/form-fill/answers": {
         parameters: {
             query?: never;
             header?: never;
@@ -162,17 +162,17 @@ export interface paths {
             cookie?: never;
         };
         /** List Answers */
-        get: operations["list_answers_api_form_fill_answers_get"];
+        get: operations["list_answers_api_v1_form_fill_answers_get"];
         put?: never;
         /** Create Answer */
-        post: operations["create_answer_api_form_fill_answers_post"];
+        post: operations["create_answer_api_v1_form_fill_answers_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/form-fill/answers/{answer_id}": {
+    "/api/v1/form-fill/answers/{answer_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -180,21 +180,21 @@ export interface paths {
             cookie?: never;
         };
         /** Get Answer */
-        get: operations["get_answer_api_form_fill_answers__answer_id__get"];
+        get: operations["get_answer_api_v1_form_fill_answers__answer_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Answer
          * @description Permanently delete one unmapped Answer and its retained value.
          */
-        delete: operations["delete_answer_api_form_fill_answers__answer_id__delete"];
+        delete: operations["delete_answer_api_v1_form_fill_answers__answer_id__delete"];
         options?: never;
         head?: never;
         /** Update Answer */
-        patch: operations["update_answer_api_form_fill_answers__answer_id__patch"];
+        patch: operations["update_answer_api_v1_form_fill_answers__answer_id__patch"];
         trace?: never;
     };
-    "/api/form-fill/captures": {
+    "/api/v1/form-fill/captures": {
         parameters: {
             query?: never;
             header?: never;
@@ -202,17 +202,17 @@ export interface paths {
             cookie?: never;
         };
         /** List Captures */
-        get: operations["list_captures_api_form_fill_captures_get"];
+        get: operations["list_captures_api_v1_form_fill_captures_get"];
         put?: never;
         /** Create Capture */
-        post: operations["create_capture_api_form_fill_captures_post"];
+        post: operations["create_capture_api_v1_form_fill_captures_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/form-fill/captures/{capture_id}": {
+    "/api/v1/form-fill/captures/{capture_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -220,17 +220,17 @@ export interface paths {
             cookie?: never;
         };
         /** Get Capture */
-        get: operations["get_capture_api_form_fill_captures__capture_id__get"];
+        get: operations["get_capture_api_v1_form_fill_captures__capture_id__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /** Update Capture */
-        patch: operations["update_capture_api_form_fill_captures__capture_id__patch"];
+        patch: operations["update_capture_api_v1_form_fill_captures__capture_id__patch"];
         trace?: never;
     };
-    "/api/form-fill/captures/{capture_id}/apply": {
+    "/api/v1/form-fill/captures/{capture_id}/apply": {
         parameters: {
             query?: never;
             header?: never;
@@ -240,14 +240,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Apply Capture */
-        post: operations["apply_capture_api_form_fill_captures__capture_id__apply_post"];
+        post: operations["apply_capture_api_v1_form_fill_captures__capture_id__apply_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/form-fill/questions": {
+    "/api/v1/form-fill/questions": {
         parameters: {
             query?: never;
             header?: never;
@@ -255,7 +255,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Questions */
-        get: operations["list_questions_api_form_fill_questions_get"];
+        get: operations["list_questions_api_v1_form_fill_questions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -264,7 +264,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/form-fill/questions/{question_id}": {
+    "/api/v1/form-fill/questions/{question_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -272,17 +272,17 @@ export interface paths {
             cookie?: never;
         };
         /** Get Question */
-        get: operations["get_question_api_form_fill_questions__question_id__get"];
+        get: operations["get_question_api_v1_form_fill_questions__question_id__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /** Update Question */
-        patch: operations["update_question_api_form_fill_questions__question_id__patch"];
+        patch: operations["update_question_api_v1_form_fill_questions__question_id__patch"];
         trace?: never;
     };
-    "/api/form-fill/questions/{question_id}/answer": {
+    "/api/v1/form-fill/questions/{question_id}/answer": {
         parameters: {
             query?: never;
             header?: never;
@@ -292,14 +292,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Create Answer For Question */
-        post: operations["create_answer_for_question_api_form_fill_questions__question_id__answer_post"];
+        post: operations["create_answer_for_question_api_v1_form_fill_questions__question_id__answer_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/form-fill/questions/{question_id}/answer-candidates": {
+    "/api/v1/form-fill/questions/{question_id}/answer-candidates": {
         parameters: {
             query?: never;
             header?: never;
@@ -307,7 +307,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Answer Candidates */
-        get: operations["list_answer_candidates_api_form_fill_questions__question_id__answer_candidates_get"];
+        get: operations["list_answer_candidates_api_v1_form_fill_questions__question_id__answer_candidates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -316,7 +316,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/form-fill/questions/{question_id}/capture-conflicts/resolve": {
+    "/api/v1/form-fill/questions/{question_id}/capture-conflicts/resolve": {
         parameters: {
             query?: never;
             header?: never;
@@ -326,14 +326,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Resolve Capture Conflict */
-        post: operations["resolve_capture_conflict_api_form_fill_questions__question_id__capture_conflicts_resolve_post"];
+        post: operations["resolve_capture_conflict_api_v1_form_fill_questions__question_id__capture_conflicts_resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/form-fill/questions/{question_id}/mapping": {
+    "/api/v1/form-fill/questions/{question_id}/mapping": {
         parameters: {
             query?: never;
             header?: never;
@@ -342,16 +342,16 @@ export interface paths {
         };
         get?: never;
         /** Put Mapping */
-        put: operations["put_mapping_api_form_fill_questions__question_id__mapping_put"];
+        put: operations["put_mapping_api_v1_form_fill_questions__question_id__mapping_put"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /** Update Mapping */
-        patch: operations["update_mapping_api_form_fill_questions__question_id__mapping_patch"];
+        patch: operations["update_mapping_api_v1_form_fill_questions__question_id__mapping_patch"];
         trace?: never;
     };
-    "/api/form-fill/resolutions": {
+    "/api/v1/form-fill/resolutions": {
         parameters: {
             query?: never;
             header?: never;
@@ -361,14 +361,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Resolve Questions */
-        post: operations["resolve_questions_api_form_fill_resolutions_post"];
+        post: operations["resolve_questions_api_v1_form_fill_resolutions_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/health": {
+    "/api/v1/health": {
         parameters: {
             query?: never;
             header?: never;
@@ -379,7 +379,7 @@ export interface paths {
          * Health
          * @description DB-free liveness probe for the extension's reachability poll.
          */
-        get: operations["health_api_health_get"];
+        get: operations["health_api_v1_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -388,7 +388,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs": {
+    "/api/v1/jobs": {
         parameters: {
             query?: never;
             header?: never;
@@ -396,7 +396,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Jobs */
-        get: operations["list_jobs_api_jobs_get"];
+        get: operations["list_jobs_api_v1_jobs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -405,7 +405,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{job_id}": {
+    "/api/v1/jobs/{job_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -413,21 +413,21 @@ export interface paths {
             cookie?: never;
         };
         /** Get Job */
-        get: operations["get_job_api_jobs__job_id__get"];
+        get: operations["get_job_api_v1_jobs__job_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Job
          * @description Delete a job and all of its listings, events, and documents.
          */
-        delete: operations["delete_job_api_jobs__job_id__delete"];
+        delete: operations["delete_job_api_v1_jobs__job_id__delete"];
         options?: never;
         head?: never;
         /** Update Job */
-        patch: operations["update_job_api_jobs__job_id__patch"];
+        patch: operations["update_job_api_v1_jobs__job_id__patch"];
         trace?: never;
     };
-    "/api/jobs/{job_id}/application-workflow": {
+    "/api/v1/jobs/{job_id}/application-workflow": {
         parameters: {
             query?: never;
             header?: never;
@@ -435,9 +435,9 @@ export interface paths {
             cookie?: never;
         };
         /** Get Application Workflow */
-        get: operations["get_application_workflow_api_jobs__job_id__application_workflow_get"];
+        get: operations["get_application_workflow_api_v1_jobs__job_id__application_workflow_get"];
         /** Put Application Workflow */
-        put: operations["put_application_workflow_api_jobs__job_id__application_workflow_put"];
+        put: operations["put_application_workflow_api_v1_jobs__job_id__application_workflow_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -445,7 +445,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{job_id}/corrections": {
+    "/api/v1/jobs/{job_id}/corrections": {
         parameters: {
             query?: never;
             header?: never;
@@ -458,14 +458,14 @@ export interface paths {
          * Correct Status
          * @description Set any status and record the deliberate correction.
          */
-        post: operations["correct_status_api_jobs__job_id__corrections_post"];
+        post: operations["correct_status_api_v1_jobs__job_id__corrections_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{job_id}/documents": {
+    "/api/v1/jobs/{job_id}/documents": {
         parameters: {
             query?: never;
             header?: never;
@@ -475,14 +475,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Create Document */
-        post: operations["create_document_api_jobs__job_id__documents_post"];
+        post: operations["create_document_api_v1_jobs__job_id__documents_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{job_id}/false-match": {
+    "/api/v1/jobs/{job_id}/false-match": {
         parameters: {
             query?: never;
             header?: never;
@@ -495,14 +495,14 @@ export interface paths {
          * False Match Job
          * @description Mutually exclude two stored jobs from duplicate suggestions.
          */
-        post: operations["false_match_job_api_jobs__job_id__false_match_post"];
+        post: operations["false_match_job_api_v1_jobs__job_id__false_match_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{job_id}/link-job": {
+    "/api/v1/jobs/{job_id}/link-job": {
         parameters: {
             query?: never;
             header?: never;
@@ -515,14 +515,14 @@ export interface paths {
          * Link Job
          * @description Merge two complete stored jobs under the standard survivor rules.
          */
-        post: operations["link_job_api_jobs__job_id__link_job_post"];
+        post: operations["link_job_api_v1_jobs__job_id__link_job_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{job_id}/matches": {
+    "/api/v1/jobs/{job_id}/matches": {
         parameters: {
             query?: never;
             header?: never;
@@ -533,7 +533,7 @@ export interface paths {
          * Match Job
          * @description Return duplicate candidates using the stored job and all its listings.
          */
-        get: operations["match_job_api_jobs__job_id__matches_get"];
+        get: operations["match_job_api_v1_jobs__job_id__matches_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -542,7 +542,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{job_id}/status/revert": {
+    "/api/v1/jobs/{job_id}/status/revert": {
         parameters: {
             query?: never;
             header?: never;
@@ -555,14 +555,14 @@ export interface paths {
          * Revert Status
          * @description Remove the latest status-setting event and reproject the prior state.
          */
-        post: operations["revert_status_api_jobs__job_id__status_revert_post"];
+        post: operations["revert_status_api_v1_jobs__job_id__status_revert_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/applied-count": {
+    "/api/v1/jobs/applied-count": {
         parameters: {
             query?: never;
             header?: never;
@@ -573,7 +573,7 @@ export interface paths {
          * Applied Count
          * @description Count jobs carrying application evidence for a company.
          */
-        get: operations["applied_count_api_jobs_applied_count_get"];
+        get: operations["applied_count_api_v1_jobs_applied_count_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -582,7 +582,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/matches": {
+    "/api/v1/jobs/matches": {
         parameters: {
             query?: never;
             header?: never;
@@ -593,7 +593,7 @@ export interface paths {
          * Match Listings
          * @description Return duplicate candidates without materializing the current listing.
          */
-        get: operations["match_listings_api_jobs_matches_get"];
+        get: operations["match_listings_api_v1_jobs_matches_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -602,7 +602,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/states": {
+    "/api/v1/jobs/states": {
         parameters: {
             query?: never;
             header?: never;
@@ -610,7 +610,7 @@ export interface paths {
             cookie?: never;
         };
         /** State For Listings */
-        get: operations["state_for_listings_api_jobs_states_get"];
+        get: operations["state_for_listings_api_v1_jobs_states_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -619,7 +619,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/listings": {
+    "/api/v1/listings": {
         parameters: {
             query?: never;
             header?: never;
@@ -629,14 +629,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Create Listing */
-        post: operations["create_listing_api_listings_post"];
+        post: operations["create_listing_api_v1_listings_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/listings/{listing_id}": {
+    "/api/v1/listings/{listing_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -650,14 +650,14 @@ export interface paths {
          * Delete Listing
          * @description Delete one listing and dissolve its job if no listings remain.
          */
-        delete: operations["delete_listing_api_listings__listing_id__delete"];
+        delete: operations["delete_listing_api_v1_listings__listing_id__delete"];
         options?: never;
         head?: never;
         /** Update Listing */
-        patch: operations["update_listing_api_listings__listing_id__patch"];
+        patch: operations["update_listing_api_v1_listings__listing_id__patch"];
         trace?: never;
     };
-    "/api/listings/false-match": {
+    "/api/v1/listings/false-match": {
         parameters: {
             query?: never;
             header?: never;
@@ -672,14 +672,14 @@ export interface paths {
          *
          *     Materializes the current listing if it is not tracked yet.
          */
-        post: operations["create_false_match_api_listings_false_match_post"];
+        post: operations["create_false_match_api_v1_listings_false_match_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/listings/link-job": {
+    "/api/v1/listings/link-job": {
         parameters: {
             query?: never;
             header?: never;
@@ -694,14 +694,14 @@ export interface paths {
          *
          *     Returns the current listing's address under the surviving job.
          */
-        post: operations["link_job_api_listings_link_job_post"];
+        post: operations["link_job_api_v1_listings_link_job_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/listings/lookup": {
+    "/api/v1/listings/lookup": {
         parameters: {
             query?: never;
             header?: never;
@@ -712,7 +712,7 @@ export interface paths {
          * Lookup Listing
          * @description Resolve a listing natural key to its stored job and listing ids.
          */
-        get: operations["lookup_listing_api_listings_lookup_get"];
+        get: operations["lookup_listing_api_v1_listings_lookup_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -721,7 +721,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/meta/note-titles": {
+    "/api/v1/meta/note-titles": {
         parameters: {
             query?: never;
             header?: never;
@@ -732,7 +732,7 @@ export interface paths {
          * Get Note Titles
          * @description Return previously used note titles, most-used first.
          */
-        get: operations["get_note_titles_api_meta_note_titles_get"];
+        get: operations["get_note_titles_api_v1_meta_note_titles_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -741,7 +741,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/meta/vocabulary": {
+    "/api/v1/meta/vocabulary": {
         parameters: {
             query?: never;
             header?: never;
@@ -752,7 +752,7 @@ export interface paths {
          * Get Vocabulary
          * @description Return previously used metadata keys and values, most-used first.
          */
-        get: operations["get_vocabulary_api_meta_vocabulary_get"];
+        get: operations["get_vocabulary_api_v1_meta_vocabulary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -761,7 +761,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/notifications": {
+    "/api/v1/notifications": {
         parameters: {
             query?: never;
             header?: never;
@@ -769,17 +769,17 @@ export interface paths {
             cookie?: never;
         };
         /** List Notifications */
-        get: operations["list_notifications_api_notifications_get"];
+        get: operations["list_notifications_api_v1_notifications_get"];
         put?: never;
         /** Create */
-        post: operations["create_api_notifications_post"];
+        post: operations["create_api_v1_notifications_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/{notification_id}": {
+    "/api/v1/notifications/{notification_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -787,17 +787,17 @@ export interface paths {
             cookie?: never;
         };
         /** Get */
-        get: operations["get_api_notifications__notification_id__get"];
+        get: operations["get_api_v1_notifications__notification_id__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /** Update */
-        patch: operations["update_api_notifications__notification_id__patch"];
+        patch: operations["update_api_v1_notifications__notification_id__patch"];
         trace?: never;
     };
-    "/api/notifications/{notification_id}/ack": {
+    "/api/v1/notifications/{notification_id}/ack": {
         parameters: {
             query?: never;
             header?: never;
@@ -807,14 +807,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Acknowledge */
-        post: operations["acknowledge_api_notifications__notification_id__ack_post"];
+        post: operations["acknowledge_api_v1_notifications__notification_id__ack_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/{notification_id}/cancel": {
+    "/api/v1/notifications/{notification_id}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -824,14 +824,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Cancel */
-        post: operations["cancel_api_notifications__notification_id__cancel_post"];
+        post: operations["cancel_api_v1_notifications__notification_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/{notification_id}/read": {
+    "/api/v1/notifications/{notification_id}/read": {
         parameters: {
             query?: never;
             header?: never;
@@ -841,14 +841,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Read */
-        post: operations["read_api_notifications__notification_id__read_post"];
+        post: operations["read_api_v1_notifications__notification_id__read_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/push-key": {
+    "/api/v1/notifications/push-key": {
         parameters: {
             query?: never;
             header?: never;
@@ -856,7 +856,7 @@ export interface paths {
             cookie?: never;
         };
         /** Push Configuration */
-        get: operations["push_configuration_api_notifications_push_key_get"];
+        get: operations["push_configuration_api_v1_notifications_push_key_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -865,7 +865,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/push-subscriptions": {
+    "/api/v1/notifications/push-subscriptions": {
         parameters: {
             query?: never;
             header?: never;
@@ -875,15 +875,15 @@ export interface paths {
         get?: never;
         put?: never;
         /** Subscribe Push */
-        post: operations["subscribe_push_api_notifications_push_subscriptions_post"];
+        post: operations["subscribe_push_api_v1_notifications_push_subscriptions_post"];
         /** Unsubscribe Push */
-        delete: operations["unsubscribe_push_api_notifications_push_subscriptions_delete"];
+        delete: operations["unsubscribe_push_api_v1_notifications_push_subscriptions_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notifications/stream": {
+    "/api/v1/notifications/stream": {
         parameters: {
             query?: never;
             header?: never;
@@ -891,7 +891,7 @@ export interface paths {
             cookie?: never;
         };
         /** Stream */
-        get: operations["stream_api_notifications_stream_get"];
+        get: operations["stream_api_v1_notifications_stream_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -900,7 +900,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/search-log": {
+    "/api/v1/search-log": {
         parameters: {
             query?: never;
             header?: never;
@@ -911,24 +911,24 @@ export interface paths {
          * List Search Log
          * @description Return recent search-diagnostic rows, newest first.
          */
-        get: operations["list_search_log_api_search_log_get"];
+        get: operations["list_search_log_api_v1_search_log_get"];
         put?: never;
         /**
          * Create Search Log
          * @description Record one opted-in popup search session.
          */
-        post: operations["create_search_log_api_search_log_post"];
+        post: operations["create_search_log_api_v1_search_log_post"];
         /**
          * Clear Search Log
          * @description Delete every stored search-diagnostic row.
          */
-        delete: operations["clear_search_log_api_search_log_delete"];
+        delete: operations["clear_search_log_api_v1_search_log_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/search-log/report": {
+    "/api/v1/search-log/report": {
         parameters: {
             query?: never;
             header?: never;
@@ -939,7 +939,7 @@ export interface paths {
          * Search Log Report
          * @description Click-through by automatic seed rule, or `typed` when no seed was used.
          */
-        get: operations["search_log_report_api_search_log_report_get"];
+        get: operations["search_log_report_api_v1_search_log_report_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -948,7 +948,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings": {
+    "/api/v1/settings": {
         parameters: {
             query?: never;
             header?: never;
@@ -956,17 +956,17 @@ export interface paths {
             cookie?: never;
         };
         /** Read Settings */
-        get: operations["read_settings_api_settings_get"];
+        get: operations["read_settings_api_v1_settings_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /** Update Settings */
-        patch: operations["update_settings_api_settings_patch"];
+        patch: operations["update_settings_api_v1_settings_patch"];
         trace?: never;
     };
-    "/api/stats": {
+    "/api/v1/stats": {
         parameters: {
             query?: never;
             header?: never;
@@ -974,7 +974,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Stats */
-        get: operations["get_stats_api_stats_get"];
+        get: operations["get_stats_api_v1_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3405,7 +3405,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list_blocked_api_blocked_companies_get: {
+    list_blocked_api_v1_blocked_companies_get: {
         parameters: {
             query?: never;
             header?: {
@@ -3526,7 +3526,7 @@ export interface operations {
             };
         };
     };
-    block_company_api_blocked_companies_post: {
+    block_company_api_v1_blocked_companies_post: {
         parameters: {
             query?: never;
             header?: {
@@ -3651,7 +3651,7 @@ export interface operations {
             };
         };
     };
-    unblock_company_api_blocked_companies__company_key__delete: {
+    unblock_company_api_v1_blocked_companies__company_key__delete: {
         parameters: {
             query?: {
                 platform?: string;
@@ -3774,7 +3774,7 @@ export interface operations {
             };
         };
     };
-    get_document_operation_api_document_operations_get: {
+    get_document_operation_api_v1_document_operations_get: {
         parameters: {
             query: {
                 operation_key: string;
@@ -3897,7 +3897,7 @@ export interface operations {
             };
         };
     };
-    delete_document_api_documents__document_id__delete: {
+    delete_document_api_v1_documents__document_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -4018,7 +4018,7 @@ export interface operations {
             };
         };
     };
-    update_document_api_documents__document_id__patch: {
+    update_document_api_v1_documents__document_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -4145,7 +4145,7 @@ export interface operations {
             };
         };
     };
-    get_event_operation_api_event_operations_get: {
+    get_event_operation_api_v1_event_operations_get: {
         parameters: {
             query: {
                 operation_key: string;
@@ -4268,7 +4268,7 @@ export interface operations {
             };
         };
     };
-    create_event_api_events_post: {
+    create_event_api_v1_events_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4393,7 +4393,7 @@ export interface operations {
             };
         };
     };
-    delete_note_event_api_events__event_id__delete: {
+    delete_note_event_api_v1_events__event_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -4514,7 +4514,7 @@ export interface operations {
             };
         };
     };
-    edit_event_api_events__event_id__patch: {
+    edit_event_api_v1_events__event_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -4641,7 +4641,7 @@ export interface operations {
             };
         };
     };
-    list_answers_api_form_fill_answers_get: {
+    list_answers_api_v1_form_fill_answers_get: {
         parameters: {
             query?: {
                 cursor?: string | null;
@@ -4769,7 +4769,7 @@ export interface operations {
             };
         };
     };
-    create_answer_api_form_fill_answers_post: {
+    create_answer_api_v1_form_fill_answers_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4894,7 +4894,7 @@ export interface operations {
             };
         };
     };
-    get_answer_api_form_fill_answers__answer_id__get: {
+    get_answer_api_v1_form_fill_answers__answer_id__get: {
         parameters: {
             query?: never;
             header?: {
@@ -5017,7 +5017,7 @@ export interface operations {
             };
         };
     };
-    delete_answer_api_form_fill_answers__answer_id__delete: {
+    delete_answer_api_v1_form_fill_answers__answer_id__delete: {
         parameters: {
             query: {
                 expected_revision: number;
@@ -5140,7 +5140,7 @@ export interface operations {
             };
         };
     };
-    update_answer_api_form_fill_answers__answer_id__patch: {
+    update_answer_api_v1_form_fill_answers__answer_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -5267,7 +5267,7 @@ export interface operations {
             };
         };
     };
-    list_captures_api_form_fill_captures_get: {
+    list_captures_api_v1_form_fill_captures_get: {
         parameters: {
             query?: {
                 cursor?: string | null;
@@ -5395,7 +5395,7 @@ export interface operations {
             };
         };
     };
-    create_capture_api_form_fill_captures_post: {
+    create_capture_api_v1_form_fill_captures_post: {
         parameters: {
             query?: never;
             header?: {
@@ -5520,7 +5520,7 @@ export interface operations {
             };
         };
     };
-    get_capture_api_form_fill_captures__capture_id__get: {
+    get_capture_api_v1_form_fill_captures__capture_id__get: {
         parameters: {
             query?: never;
             header?: {
@@ -5643,7 +5643,7 @@ export interface operations {
             };
         };
     };
-    update_capture_api_form_fill_captures__capture_id__patch: {
+    update_capture_api_v1_form_fill_captures__capture_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -5770,7 +5770,7 @@ export interface operations {
             };
         };
     };
-    apply_capture_api_form_fill_captures__capture_id__apply_post: {
+    apply_capture_api_v1_form_fill_captures__capture_id__apply_post: {
         parameters: {
             query?: never;
             header?: {
@@ -5897,7 +5897,7 @@ export interface operations {
             };
         };
     };
-    list_questions_api_form_fill_questions_get: {
+    list_questions_api_v1_form_fill_questions_get: {
         parameters: {
             query?: {
                 answer_id?: string | null;
@@ -6032,7 +6032,7 @@ export interface operations {
             };
         };
     };
-    get_question_api_form_fill_questions__question_id__get: {
+    get_question_api_v1_form_fill_questions__question_id__get: {
         parameters: {
             query?: never;
             header?: {
@@ -6155,7 +6155,7 @@ export interface operations {
             };
         };
     };
-    update_question_api_form_fill_questions__question_id__patch: {
+    update_question_api_v1_form_fill_questions__question_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -6282,7 +6282,7 @@ export interface operations {
             };
         };
     };
-    create_answer_for_question_api_form_fill_questions__question_id__answer_post: {
+    create_answer_for_question_api_v1_form_fill_questions__question_id__answer_post: {
         parameters: {
             query?: never;
             header?: {
@@ -6409,7 +6409,7 @@ export interface operations {
             };
         };
     };
-    list_answer_candidates_api_form_fill_questions__question_id__answer_candidates_get: {
+    list_answer_candidates_api_v1_form_fill_questions__question_id__answer_candidates_get: {
         parameters: {
             query?: {
                 cursor?: string | null;
@@ -6536,7 +6536,7 @@ export interface operations {
             };
         };
     };
-    resolve_capture_conflict_api_form_fill_questions__question_id__capture_conflicts_resolve_post: {
+    resolve_capture_conflict_api_v1_form_fill_questions__question_id__capture_conflicts_resolve_post: {
         parameters: {
             query?: never;
             header?: {
@@ -6663,7 +6663,7 @@ export interface operations {
             };
         };
     };
-    put_mapping_api_form_fill_questions__question_id__mapping_put: {
+    put_mapping_api_v1_form_fill_questions__question_id__mapping_put: {
         parameters: {
             query?: never;
             header?: {
@@ -6790,7 +6790,7 @@ export interface operations {
             };
         };
     };
-    update_mapping_api_form_fill_questions__question_id__mapping_patch: {
+    update_mapping_api_v1_form_fill_questions__question_id__mapping_patch: {
         parameters: {
             query?: never;
             header?: {
@@ -6917,7 +6917,7 @@ export interface operations {
             };
         };
     };
-    resolve_questions_api_form_fill_resolutions_post: {
+    resolve_questions_api_v1_form_fill_resolutions_post: {
         parameters: {
             query?: never;
             header?: {
@@ -7042,7 +7042,7 @@ export interface operations {
             };
         };
     };
-    health_api_health_get: {
+    health_api_v1_health_get: {
         parameters: {
             query?: never;
             header?: {
@@ -7165,7 +7165,7 @@ export interface operations {
             };
         };
     };
-    list_jobs_api_jobs_get: {
+    list_jobs_api_v1_jobs_get: {
         parameters: {
             query?: {
                 apply_type?: string | null;
@@ -7297,7 +7297,7 @@ export interface operations {
             };
         };
     };
-    get_job_api_jobs__job_id__get: {
+    get_job_api_v1_jobs__job_id__get: {
         parameters: {
             query?: never;
             header?: {
@@ -7420,7 +7420,7 @@ export interface operations {
             };
         };
     };
-    delete_job_api_jobs__job_id__delete: {
+    delete_job_api_v1_jobs__job_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -7541,7 +7541,7 @@ export interface operations {
             };
         };
     };
-    update_job_api_jobs__job_id__patch: {
+    update_job_api_v1_jobs__job_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -7668,7 +7668,7 @@ export interface operations {
             };
         };
     };
-    get_application_workflow_api_jobs__job_id__application_workflow_get: {
+    get_application_workflow_api_v1_jobs__job_id__application_workflow_get: {
         parameters: {
             query?: never;
             header?: {
@@ -7791,7 +7791,7 @@ export interface operations {
             };
         };
     };
-    put_application_workflow_api_jobs__job_id__application_workflow_put: {
+    put_application_workflow_api_v1_jobs__job_id__application_workflow_put: {
         parameters: {
             query?: never;
             header?: {
@@ -7927,7 +7927,7 @@ export interface operations {
             };
         };
     };
-    correct_status_api_jobs__job_id__corrections_post: {
+    correct_status_api_v1_jobs__job_id__corrections_post: {
         parameters: {
             query?: never;
             header?: {
@@ -8054,7 +8054,7 @@ export interface operations {
             };
         };
     };
-    create_document_api_jobs__job_id__documents_post: {
+    create_document_api_v1_jobs__job_id__documents_post: {
         parameters: {
             query?: never;
             header?: {
@@ -8181,7 +8181,7 @@ export interface operations {
             };
         };
     };
-    false_match_job_api_jobs__job_id__false_match_post: {
+    false_match_job_api_v1_jobs__job_id__false_match_post: {
         parameters: {
             query?: never;
             header?: {
@@ -8306,7 +8306,7 @@ export interface operations {
             };
         };
     };
-    link_job_api_jobs__job_id__link_job_post: {
+    link_job_api_v1_jobs__job_id__link_job_post: {
         parameters: {
             query?: never;
             header?: {
@@ -8433,7 +8433,7 @@ export interface operations {
             };
         };
     };
-    match_job_api_jobs__job_id__matches_get: {
+    match_job_api_v1_jobs__job_id__matches_get: {
         parameters: {
             query?: never;
             header?: {
@@ -8556,7 +8556,7 @@ export interface operations {
             };
         };
     };
-    revert_status_api_jobs__job_id__status_revert_post: {
+    revert_status_api_v1_jobs__job_id__status_revert_post: {
         parameters: {
             query?: never;
             header?: {
@@ -8683,7 +8683,7 @@ export interface operations {
             };
         };
     };
-    applied_count_api_jobs_applied_count_get: {
+    applied_count_api_v1_jobs_applied_count_get: {
         parameters: {
             query?: {
                 company?: string | null;
@@ -8806,7 +8806,7 @@ export interface operations {
             };
         };
     };
-    match_listings_api_jobs_matches_get: {
+    match_listings_api_v1_jobs_matches_get: {
         parameters: {
             query: {
                 company?: string | null;
@@ -8932,7 +8932,7 @@ export interface operations {
             };
         };
     };
-    state_for_listings_api_jobs_states_get: {
+    state_for_listings_api_v1_jobs_states_get: {
         parameters: {
             query: {
                 platform: string;
@@ -9056,7 +9056,7 @@ export interface operations {
             };
         };
     };
-    create_listing_api_listings_post: {
+    create_listing_api_v1_listings_post: {
         parameters: {
             query?: never;
             header?: {
@@ -9181,7 +9181,7 @@ export interface operations {
             };
         };
     };
-    delete_listing_api_listings__listing_id__delete: {
+    delete_listing_api_v1_listings__listing_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -9302,7 +9302,7 @@ export interface operations {
             };
         };
     };
-    update_listing_api_listings__listing_id__patch: {
+    update_listing_api_v1_listings__listing_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -9429,7 +9429,7 @@ export interface operations {
             };
         };
     };
-    create_false_match_api_listings_false_match_post: {
+    create_false_match_api_v1_listings_false_match_post: {
         parameters: {
             query?: never;
             header?: {
@@ -9552,7 +9552,7 @@ export interface operations {
             };
         };
     };
-    link_job_api_listings_link_job_post: {
+    link_job_api_v1_listings_link_job_post: {
         parameters: {
             query?: never;
             header?: {
@@ -9677,7 +9677,7 @@ export interface operations {
             };
         };
     };
-    lookup_listing_api_listings_lookup_get: {
+    lookup_listing_api_v1_listings_lookup_get: {
         parameters: {
             query: {
                 platform: string;
@@ -9801,7 +9801,7 @@ export interface operations {
             };
         };
     };
-    get_note_titles_api_meta_note_titles_get: {
+    get_note_titles_api_v1_meta_note_titles_get: {
         parameters: {
             query?: never;
             header?: {
@@ -9922,7 +9922,7 @@ export interface operations {
             };
         };
     };
-    get_vocabulary_api_meta_vocabulary_get: {
+    get_vocabulary_api_v1_meta_vocabulary_get: {
         parameters: {
             query?: {
                 entity?: string;
@@ -10045,7 +10045,7 @@ export interface operations {
             };
         };
     };
-    list_notifications_api_notifications_get: {
+    list_notifications_api_v1_notifications_get: {
         parameters: {
             query?: {
                 before?: string | null;
@@ -10172,7 +10172,7 @@ export interface operations {
             };
         };
     };
-    create_api_notifications_post: {
+    create_api_v1_notifications_post: {
         parameters: {
             query?: never;
             header?: {
@@ -10297,7 +10297,7 @@ export interface operations {
             };
         };
     };
-    get_api_notifications__notification_id__get: {
+    get_api_v1_notifications__notification_id__get: {
         parameters: {
             query?: never;
             header?: {
@@ -10420,7 +10420,7 @@ export interface operations {
             };
         };
     };
-    update_api_notifications__notification_id__patch: {
+    update_api_v1_notifications__notification_id__patch: {
         parameters: {
             query?: never;
             header?: {
@@ -10547,7 +10547,7 @@ export interface operations {
             };
         };
     };
-    acknowledge_api_notifications__notification_id__ack_post: {
+    acknowledge_api_v1_notifications__notification_id__ack_post: {
         parameters: {
             query?: never;
             header?: {
@@ -10674,7 +10674,7 @@ export interface operations {
             };
         };
     };
-    cancel_api_notifications__notification_id__cancel_post: {
+    cancel_api_v1_notifications__notification_id__cancel_post: {
         parameters: {
             query?: never;
             header?: {
@@ -10801,7 +10801,7 @@ export interface operations {
             };
         };
     };
-    read_api_notifications__notification_id__read_post: {
+    read_api_v1_notifications__notification_id__read_post: {
         parameters: {
             query?: never;
             header?: {
@@ -10928,7 +10928,7 @@ export interface operations {
             };
         };
     };
-    push_configuration_api_notifications_push_key_get: {
+    push_configuration_api_v1_notifications_push_key_get: {
         parameters: {
             query?: never;
             header?: {
@@ -11049,7 +11049,7 @@ export interface operations {
             };
         };
     };
-    subscribe_push_api_notifications_push_subscriptions_post: {
+    subscribe_push_api_v1_notifications_push_subscriptions_post: {
         parameters: {
             query?: never;
             header?: {
@@ -11172,7 +11172,7 @@ export interface operations {
             };
         };
     };
-    unsubscribe_push_api_notifications_push_subscriptions_delete: {
+    unsubscribe_push_api_v1_notifications_push_subscriptions_delete: {
         parameters: {
             query?: never;
             header?: {
@@ -11295,7 +11295,7 @@ export interface operations {
             };
         };
     };
-    stream_api_notifications_stream_get: {
+    stream_api_v1_notifications_stream_get: {
         parameters: {
             query?: never;
             header?: {
@@ -11416,7 +11416,7 @@ export interface operations {
             };
         };
     };
-    list_search_log_api_search_log_get: {
+    list_search_log_api_v1_search_log_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -11539,7 +11539,7 @@ export interface operations {
             };
         };
     };
-    create_search_log_api_search_log_post: {
+    create_search_log_api_v1_search_log_post: {
         parameters: {
             query?: never;
             header?: {
@@ -11662,7 +11662,7 @@ export interface operations {
             };
         };
     };
-    clear_search_log_api_search_log_delete: {
+    clear_search_log_api_v1_search_log_delete: {
         parameters: {
             query?: never;
             header?: {
@@ -11781,7 +11781,7 @@ export interface operations {
             };
         };
     };
-    search_log_report_api_search_log_report_get: {
+    search_log_report_api_v1_search_log_report_get: {
         parameters: {
             query?: never;
             header?: {
@@ -11902,7 +11902,7 @@ export interface operations {
             };
         };
     };
-    read_settings_api_settings_get: {
+    read_settings_api_v1_settings_get: {
         parameters: {
             query?: never;
             header?: {
@@ -12023,7 +12023,7 @@ export interface operations {
             };
         };
     };
-    update_settings_api_settings_patch: {
+    update_settings_api_v1_settings_patch: {
         parameters: {
             query?: never;
             header?: {
@@ -12148,7 +12148,7 @@ export interface operations {
             };
         };
     };
-    get_stats_api_stats_get: {
+    get_stats_api_v1_stats_get: {
         parameters: {
             query?: never;
             header?: {

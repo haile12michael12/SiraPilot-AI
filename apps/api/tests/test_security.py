@@ -18,6 +18,12 @@ def test_allowed_origin_gets_cors_header(client: TestClient) -> None:
     assert resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
 
 
+def test_v1_api_is_available_and_uses_the_same_cors_policy(client: TestClient) -> None:
+    resp = client.get("/api/v1/jobs", headers={"Origin": "http://localhost:5173"})
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
 def test_disallowed_origin_gets_no_cors_header(client: TestClient) -> None:
     # The server doesn't 4xx a disallowed origin (CORS is enforced by the
     # browser, not this middleware) — it just omits the header the browser
@@ -57,6 +63,11 @@ def test_missing_key_is_401_when_configured(keyed_client: TestClient) -> None:
     assert resp.status_code == 401
 
 
+def test_v1_api_uses_the_configured_api_key(keyed_client: TestClient) -> None:
+    assert keyed_client.get("/api/v1/jobs").status_code == 401
+    assert keyed_client.get("/api/v1/jobs", headers={"X-API-Key": "test-key"}).status_code == 200
+
+
 def test_wrong_key_is_401(keyed_client: TestClient) -> None:
     resp = keyed_client.get("/api/jobs", headers={"X-API-Key": "wrong"})
     assert resp.status_code == 401
@@ -71,10 +82,17 @@ def test_docs_route_is_not_gated_by_api_key(keyed_client: TestClient) -> None:
     # /docs and /openapi.json are FastAPI's own routes, outside the /api
     # router group the key dependency is attached to.
     assert keyed_client.get("/docs").status_code == 200
+    assert "/api/v1/jobs" in keyed_client.get("/openapi.json").json()["paths"]
 
 
 @pytest.mark.parametrize(
-    "path", ["/api/form-fill/answers", "/api/jobs/missing/application-workflow"]
+    "path",
+    [
+        "/api/form-fill/answers",
+        "/api/jobs/missing/application-workflow",
+        "/api/v1/form-fill/answers",
+        "/api/v1/jobs/missing/application-workflow",
+    ],
 )
 @pytest.mark.parametrize("key", [None, "wrong"])
 def test_private_authorization_errors_are_no_store(
@@ -92,7 +110,13 @@ def test_private_authorization_errors_are_no_store(
 
 
 @pytest.mark.parametrize(
-    "path", ["/api/form-fill/answers", "/api/jobs/missing/application-workflow"]
+    "path",
+    [
+        "/api/form-fill/answers",
+        "/api/jobs/missing/application-workflow",
+        "/api/v1/form-fill/answers",
+        "/api/v1/jobs/missing/application-workflow",
+    ],
 )
 def test_private_host_rejections_are_no_store(client: TestClient, path: str) -> None:
     response = client.get(path, headers={"Host": "evil.example.com"})
@@ -122,8 +146,22 @@ def test_private_http_errors_preserve_retry_headers(client: TestClient) -> None:
     assert response.headers.get("cache-control") == "no-store"
 
 
-@pytest.mark.parametrize("path", ["/api/form-fill", "/api/form-fill/not-a-route"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/form-fill",
+        "/api/form-fill/not-a-route",
+        "/api/v1/form-fill",
+        "/api/v1/form-fill/not-a-route",
+    ],
+)
 def test_private_framework_not_found_is_no_store(client: TestClient, path: str) -> None:
     response = client.get(path)
     assert response.status_code == 404
     assert response.headers.get("cache-control") == "no-store"
+
+
+def test_settings_hide_configured_secrets_in_repr() -> None:
+    settings = Settings(api_key="test-key", turso_auth_token="test-token")
+    assert "test-key" not in repr(settings)
+    assert "test-token" not in repr(settings)

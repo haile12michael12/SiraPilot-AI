@@ -16,7 +16,7 @@ The target repository structure introduces users, profiles, authentication, Post
 3. Existing SQLite/libSQL/Turso data is transferred only by an explicit import into a selected account. Import requires a verified backup and must never run automatically at application startup.
 4. The importer preserves source data, scopes all imported private records to the selected account, validates relationships, and supports safe retry.
 5. The current local-first application remains the supported runtime until the target is implemented and passes its migration, isolation, client, and release gates.
-6. API file moves preserve existing `/api/...` URLs. Public API version-prefix changes are out of scope for structural refactoring.
+6. `/api/v1/...` is the documented API contract. Existing `/api/...` routes remain compatibility aliases until clients migrate and a breaking release removes them.
 7. New product features are not created as empty packages. Each module is introduced with behavior, contracts, tests, and documentation.
 
 ## Required follow-up design
