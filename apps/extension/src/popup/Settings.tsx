@@ -6,6 +6,7 @@ import { KeywordSettings } from "./KeywordSettings";
 import { DiagnosticsSettings } from "./DiagnosticsSettings";
 import { EasyApplyToggle } from "./EasyApplyToggle";
 import { ServerSettings } from "./ServerSettings";
+import { AccountSettings } from "./AccountSettings";
 
 // Keep this keyboard list aligned with Popup, Detail, and the manifest command.
 // Use a static list: Chrome closes action popups on Escape, preventing a dismissible modal.
@@ -31,6 +32,7 @@ export function Settings({ reachable }: { reachable: boolean }) {
   return (
     <div className="mt-2.5 flex flex-col gap-2.5">
       <ServerSettings reachable={reachable} />
+      <AccountSettings />
       <div className="flex items-center justify-between gap-2.5">
         <span className="text-[13px] text-popup-fg">{copy.settings.theme}</span>
         <ThemeToggle />

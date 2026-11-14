@@ -1,4 +1,22 @@
 export const copy = {
+  account: {
+    title: "Account",
+    email: "Email",
+    password: "Password",
+    checkingSession: "Checking account session…",
+    signedInAs: (email: string) => `Signed in as ${email}`,
+    signIn: "Sign in",
+    signingIn: "Signing in…",
+    signOut: "Sign out",
+    signingOut: "Signing out…",
+    invalidCredentials: "Email or password is incorrect.",
+    extensionNotAllowed: "This server is not configured to sign in this extension.",
+    signInNotConfigured: "Account sign-in is not enabled on this server.",
+    signInFailed: "Could not sign in. Check the server connection and try again.",
+    signOutFailed: "Could not sign out. Check the server connection and try again.",
+    httpsRequired: "Sign-in requires HTTPS, except for localhost.",
+    invalidServerResponse: "The server returned an invalid account response.",
+  },
   reminder: {
     add: "Add reminder",
     title: "Title",

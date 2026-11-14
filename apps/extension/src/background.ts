@@ -1,8 +1,8 @@
 import { copy } from "./copy";
+import { withAuth } from "./auth.js";
 // Service-worker API proxy. Content scripts relay typed requests here to avoid host
 // page CSP restrictions on localhost access.
 import {
-  API_BASE_URL,
   SERVER_URL,
   DEFAULT_SERVER_URL,
   initializeServerConfig,
@@ -93,7 +93,9 @@ async function reportingFetch(path: string, init?: RequestInit) {
   const server = SERVER_URL;
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, init);
+    const requestInit = await withAuth(server, init);
+    if (server !== SERVER_URL) throw new Error(copy.background.serverChangedRetryThisAction);
+    res = await fetch(`${server}/api${path}`, requestInit);
   } catch (e) {
     if (server === SERVER_URL) markServerReachable(false);
     throw e;

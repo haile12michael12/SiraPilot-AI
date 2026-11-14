@@ -49,6 +49,11 @@ describe("content-script navigation recovery", () => {
       storage: {
         local: { get: (_key: string, cb: (data: object) => void) => cb({}) },
         onChanged: { addListener: vi.fn() },
+        session: {
+          setAccessLevel: vi.fn(async () => {}),
+          get: vi.fn(async () => ({})),
+          remove: vi.fn(async () => {}),
+        },
       },
       action: {
         setBadgeText: vi.fn(async () => {}),
@@ -107,6 +112,7 @@ async function setupBulkTabs() {
   let onMessage!: RuntimeListener;
   let onRemoved!: (tabId: number) => void;
   let storedIds: number[] = [];
+  let storedAuthSession: unknown;
   let nextId = 21;
   let onAlarm!: (alarm: { name: string }) => void;
   const liveTabs: chrome.tabs.Tab[] = [
@@ -164,9 +170,22 @@ async function setupBulkTabs() {
         },
       },
       session: {
-        get: vi.fn(async () => ({ bulkJobTabIds: [...storedIds] })),
-        set: vi.fn(async ({ bulkJobTabIds }: { bulkJobTabIds: number[] }) => {
-          storedIds = [...bulkJobTabIds];
+        setAccessLevel: vi.fn(async () => {}),
+        get: vi.fn(async (key: string) => ({
+          [key]:
+            key === "bulkJobTabIds"
+              ? [...storedIds]
+              : key === "accountAuthSession"
+                ? storedAuthSession
+                : undefined,
+        })),
+        set: vi.fn(async (values: Record<string, unknown>) => {
+          if (Array.isArray(values.bulkJobTabIds))
+            storedIds = values.bulkJobTabIds.filter((id): id is number => typeof id === "number");
+          if ("accountAuthSession" in values) storedAuthSession = values.accountAuthSession;
+        }),
+        remove: vi.fn(async (key: string) => {
+          if (key === "accountAuthSession") storedAuthSession = undefined;
         }),
       },
     },
@@ -196,6 +215,9 @@ async function setupBulkTabs() {
     query,
     send,
     ids: () => storedIds,
+    setAuthSession: (value: unknown) => {
+      storedAuthSession = value;
+    },
     changeServer: (url: string) => storageChanged({ serverUrl: { newValue: url } }, "local"),
     poll: () => onAlarm({ name: "health-poll" }),
   };
@@ -326,6 +348,38 @@ it("routes scoped requests to the saved server and rejects old default-server wr
     "https://other.example.test/api/jobs/states?platform=linkedin&platform_ids=1",
     undefined,
   );
+});
+
+it("keeps bearer credentials in the worker and out of content-script replies", async () => {
+  const { send, setAuthSession } = await setupBulkTabs();
+  setAuthSession({
+    serverUrl: "http://localhost:3456",
+    accessToken: "extension-session-secret",
+    expiresAt: Date.now() + 60_000,
+    user: {
+      account_id: "00000000-0000-4000-8000-000000000001",
+      email: "person@example.com",
+      email_verified: true,
+    },
+  });
+  const fetchRequest = vi.fn(
+    async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("[]"),
+  );
+  vi.stubGlobal("fetch", fetchRequest);
+
+  const response = await send({
+    type: "state-batch",
+    serverUrl: "http://localhost:3456",
+    platform: "linkedin",
+    platform_ids: ["1"],
+  });
+
+  const [, requestInit] = fetchRequest.mock.calls[0];
+  expect(new Headers(requestInit?.headers).get("Authorization")).toBe(
+    "Bearer extension-session-secret",
+  );
+  expect(JSON.stringify(response)).not.toContain("extension-session-secret");
+  expect(response).toEqual({ ok: true, result: [] });
 });
 
 describe("Gmail alert tab opening", () => {

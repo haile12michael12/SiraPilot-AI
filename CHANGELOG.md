@@ -6,6 +6,12 @@ One version covers the whole product. The extension, the dashboard, and the serv
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-14
+
+### Added
+
+- Optional extension account sign-in with HTTPS-protected bearer transport, trusted-context session storage, and no authentication secrets in content-script messages. Existing job routes remain unchanged and unauthorised by account sessions.
+
 ## [2.1.0] - 2026-11-14
 
 ### Added
