@@ -24,6 +24,7 @@ from app.main import create_app
 from app.modules.auth.dependencies import get_auth_settings, get_postgres_database
 from app.modules.auth.models import AuthToken
 from app.modules.auth.repository import AuthRepository
+from app.modules.auth.router import _auth_page
 from app.modules.auth.service import (
     login,
     register,
@@ -126,6 +127,12 @@ def test_postgres_settings_redact_credentials() -> None:
         database_url="postgresql+psycopg://tracker:example-password@localhost/sirapilot_test"
     )
     assert "example-password" not in repr(settings)
+
+
+def test_auth_pages_allow_same_origin_requests_under_csp() -> None:
+    response = _auth_page("<!doctype html>")
+
+    assert "connect-src 'self';" in response.headers["Content-Security-Policy"]
 
 
 @pytest.mark.postgres
@@ -415,9 +422,25 @@ def test_auth_http_routes_are_public_but_legacy_data_routes_remain_protected(
         assert logged_in.status_code == 200
         assert "access_token" not in logged_in.json()
         assert logged_in.cookies.get("__Host-sirapilot_session")
+        set_cookie = logged_in.headers["set-cookie"]
+        assert "Secure" in set_cookie and "HttpOnly" in set_cookie and "SameSite=lax" in set_cookie
         assert client.get("/api/v1/auth/me").json()["email"] == "browser@example.test"
         assert client.post("/api/v1/auth/logout").status_code == 204
         assert client.get("/api/v1/auth/me").status_code == 401
+
+        extension_origin = f"chrome-extension://{settings.extension_id}"
+        extension_login = client.post(
+            "/api/v1/auth/sessions",
+            headers={"Origin": extension_origin},
+            json={"email": "browser@example.test", "password": "a sufficiently long password"},
+        )
+        assert extension_login.status_code == 200
+        assert extension_login.json()["token_type"] == "Bearer"
+        assert extension_login.json()["access_token"]
+        assert client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {extension_login.json()['access_token']}"},
+        ).status_code == 200
     finally:
         client.close()
         application.dependency_overrides.clear()

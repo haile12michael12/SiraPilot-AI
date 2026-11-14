@@ -13,7 +13,7 @@ class AuthRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class Registration(AuthRequest):
+class Credentials(AuthRequest):
     email: EmailStr
     password: Password
 
@@ -21,6 +21,10 @@ class Registration(AuthRequest):
     @classmethod
     def normalize_email(cls, value: EmailStr) -> str:
         return str(value).strip().casefold()
+
+
+class Registration(Credentials):
+    """New account credentials."""
 
 
 class VerificationRequest(AuthRequest):
@@ -32,8 +36,8 @@ class VerificationRequest(AuthRequest):
         return str(value).strip().casefold()
 
 
-class LoginRequest(Registration):
-    pass
+class LoginRequest(Credentials):
+    """Credentials for an existing account."""
 
 
 class TokenRequest(AuthRequest):

@@ -44,7 +44,7 @@ Every private record in the PostgreSQL target must be scoped to its owning user.
 
 Relationships between private records must prevent cross-user references at the database boundary as well as in application code. Background tasks must carry an explicit owner context or operate only on globally safe records. Logs and telemetry must not include passwords, tokens, private job data, or document content.
 
-The account-authentication protocol, credential recovery, email verification, and operational deployment settings must be specified before authentication endpoints or account tables are implemented. See the [multi-user PostgreSQL ADR](ADR/0001-multi-user-postgresql.md).
+The first PostgreSQL authentication slice now specifies credential recovery, email verification, session transport and revocation, rate limits, and SMTP deployment settings. It authenticates only the opt-in PostgreSQL account endpoints; it does not authorize the existing local API. Every private PostgreSQL endpoint and background task still requires owner-scoped access tests before multi-user exposure. See the [multi-user PostgreSQL ADR](ADR/0001-multi-user-postgresql.md).
 
 ## Migration boundaries
 

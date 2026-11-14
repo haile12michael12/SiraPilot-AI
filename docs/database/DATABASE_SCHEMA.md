@@ -6,18 +6,22 @@ The supported application still uses the SQLite-compatible schema at [`apps/api/
 
 ## PostgreSQL target foundation
 
-The opt-in PostgreSQL schema is defined by the SQLAlchemy models in [`apps/api/app/infra/postgres/models.py`](../../apps/api/app/infra/postgres/models.py) and the immutable initial revision in [`apps/api/alembic/versions/0001_postgres_foundation.py`](../../apps/api/alembic/versions/0001_postgres_foundation.py). It is not created at API startup. Run Alembic explicitly against a PostgreSQL database using `POSTGRES_DATABASE_URL`.
+The opt-in PostgreSQL schema is defined by SQLAlchemy models in [`apps/api/app/infra/postgres/models.py`](../../apps/api/app/infra/postgres/models.py) and [`apps/api/app/modules/auth/models.py`](../../apps/api/app/modules/auth/models.py), with append-only revisions under `apps/api/alembic/versions/`. It is not created at API startup. Run Alembic explicitly against a PostgreSQL database using `POSTGRES_DATABASE_URL`.
 
 | Table | Ownership and purpose |
 | --- | --- |
 | `accounts` | Opaque UUID ownership namespace; contains no authentication credentials |
+| `users` | One verified-email login identity and Argon2id password hash per account |
+| `auth_tokens` | Hashed one-time email-verification and password-reset tokens with expiry/consumption state |
+| `auth_sessions` | Hashed opaque session tokens with expiry and revocation timestamps |
+| `auth_rate_limits` | HMAC-keyed operation/email/IP buckets with fixed-window counters |
 | `jobs` | Account-owned job records, state, visibility flags, JSON metadata, and timestamps |
 | `listings` | Account-owned postings, with a composite foreign key to the same account's job |
 | `events` | Account-owned job history, optionally linked to a same-account listing |
 | `documents` | Account-owned job documents and metadata |
 | `blocked_companies` | Account-owned company/platform exclusions |
 
-Every private resource carries an `account_id`. Composite foreign keys include that key when referencing a job or listing, preventing cross-account relationships even if application code supplies another account's identifier. The unique `(account_id, platform, platform_id)` listing key preserves the natural listing identity within one account. No account registration, authentication, user endpoints, or SQLite/Turso importer is implemented by this schema foundation.
+Every private resource carries an `account_id`. Composite foreign keys include that key when referencing a job or listing, preventing cross-account relationships even if application code supplies another account's identifier. The unique `(account_id, platform, platform_id)` listing key preserves the natural listing identity within one account. The authentication routes are an opt-in PostgreSQL foundation only; they do not authorize existing SQLite/Turso routes or provide the importer required for cutover.
 
 Jobs use a UUID primary key and also expose `(account_id, id)` as a unique target for owner-scoped foreign keys. Listing IDs remain strings to accommodate legacy opaque identifiers during a later explicit import. Event and document IDs are PostgreSQL identity values. Timestamps use `timestamptz`; flexible record metadata uses `jsonb`.
 
@@ -29,5 +33,6 @@ Jobs use a UUID primary key and also expose `(account_id, id)` as a unique targe
 - `events(account_id, job_id, event)` supports event-kind checks, `(account_id, job_id, ts DESC)` supports history reads, and `(account_id, listing_id)` supports listing references.
 - `documents(account_id, job_id, created_at DESC)` supports recent document reads.
 - `blocked_companies(account_id, platform)` supports account-scoped platform filtering; the primary key enforces one entry per account/company/platform.
+- Authentication indexes support token cleanup/lookup, session lookup by account and expiry, and bounded cleanup of rate-limit buckets.
 
 Add indexes only for a measured query pattern or an enforced relationship lookup. PostgreSQL migrations are forward-only; never edit a released revision or use a downgrade to remove data.

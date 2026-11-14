@@ -123,6 +123,7 @@ def _auth_page(content: str) -> HTMLResponse:
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": (
                 "default-src 'none'; "
+                "connect-src 'self'; "
                 f"script-src 'nonce-{nonce}'; "
                 "style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
             ),
