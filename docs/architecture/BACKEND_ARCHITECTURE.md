@@ -34,6 +34,34 @@ The approved redesign moves toward the following ownership:
 
 This is a destination for real implementations, not a checklist for generating empty modules. Existing responsibilities should move in small, tested steps; module names alone do not define new product behavior.
 
+## Backend modules
+
+Implement modules incrementally using a consistent router, schemas, models, repository, service, and tests structure.
+
+Priority order:
+
+1. Authentication
+2. Users and profiles
+3. Jobs
+4. Companies
+5. Applications
+6. Contacts
+7. Resume management
+8. Job intelligence
+9. Resume analysis
+10. Cover letters
+11. Interview simulator
+12. Skills analyzer
+13. Career roadmap
+14. Career copilot
+15. Analytics
+16. Notifications
+17. Integrations
+18. Workflows
+19. Settings
+
+Do not implement every advanced feature before the foundation is stable.
+
 ## Multi-user isolation
 
 The current data access layer has no user ownership boundary. Before a multi-user API can serve requests, every private record must have a durable owner, and all repository operations must be scoped to that owner. Foreign keys and unique constraints must include ownership where needed to prevent cross-account relationships and identifier collisions.
