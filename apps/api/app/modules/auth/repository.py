@@ -34,24 +34,13 @@ class AuthRepository:
 
     def create_user(self, *, email: str, password_hash: str) -> User:
         account = Account(id=uuid4())
-        user = User(
-            id=uuid4(),
-            account_id=account.id,
-            email=email,
-            password_hash=password_hash,
-        )
+        user = User(id=uuid4(), account_id=account.id, email=email, password_hash=password_hash)
         self._session.add_all([account, user])
         self._session.flush()
         return user
 
     def create_token(
-        self,
-        *,
-        user_id: UUID,
-        purpose: str,
-        token_hash: str,
-        expires_at: datetime,
-        now: datetime,
+        self, *, user_id: UUID, purpose: str, token_hash: str, expires_at: datetime, now: datetime
     ) -> None:
         self._session.execute(
             delete(AuthToken).where(AuthToken.expires_at < now - timedelta(days=30))
@@ -76,7 +65,9 @@ class AuthRepository:
         )
         self._session.flush()
 
-    def valid_token(self, *, purpose: str, token_hash: str, now: datetime) -> tuple[AuthToken, User] | None:
+    def valid_token(
+        self, *, purpose: str, token_hash: str, now: datetime
+    ) -> tuple[AuthToken, User] | None:
         result = self._session.execute(
             select(AuthToken, User)
             .join(User, User.id == AuthToken.user_id)
@@ -94,12 +85,7 @@ class AuthRepository:
         token.consumed_at = now
 
     def create_session(
-        self,
-        *,
-        user_id: UUID,
-        token_hash: str,
-        expires_at: datetime,
-        now: datetime,
+        self, *, user_id: UUID, token_hash: str, expires_at: datetime, now: datetime
     ) -> AuthSession:
         self._session.execute(
             delete(AuthSession).where(
@@ -140,21 +126,13 @@ class AuthRepository:
             .values(revoked_at=now)
         )
 
-    def consume_rate_limit(
-        self,
-        *,
-        bucket_hash: str,
-        now: datetime,
-        window: timedelta,
-    ) -> int:
+    def consume_rate_limit(self, *, bucket_hash: str, now: datetime, window: timedelta) -> int:
         expired_before = now - window
         self._session.execute(
             delete(AuthRateLimit).where(AuthRateLimit.window_started_at < now - timedelta(days=1))
         )
         statement = insert(AuthRateLimit).values(
-            bucket_hash=bucket_hash,
-            window_started_at=now,
-            attempts=1,
+            bucket_hash=bucket_hash, window_started_at=now, attempts=1
         )
         statement = statement.on_conflict_do_update(
             index_elements=[AuthRateLimit.bucket_hash],

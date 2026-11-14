@@ -16,7 +16,6 @@ from app.modules.auth.dependencies import (
     DatabaseDep,
 )
 from app.modules.auth.email import EmailDeliveryError, send_auth_email
-from app.modules.auth.models import AuthSession, User
 from app.modules.auth.schemas import (
     Accepted,
     AuthenticatedUser,
@@ -31,14 +30,14 @@ from app.modules.auth.schemas import (
 )
 from app.modules.auth.service import (
     AuthEmail,
-    login as authenticate,
-    logout as revoke_session,
-    register as create_account,
     request_password_reset,
     request_verification,
     reset_password,
     verify_email,
 )
+from app.modules.auth.service import login as authenticate
+from app.modules.auth.service import logout as revoke_session
+from app.modules.auth.service import register as create_account
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -50,9 +49,7 @@ def _client_ip(request: Request) -> str:
 
 
 def _require_allowed_origin(
-    request: Request,
-    auth_settings: AuthSettings,
-    app_settings: Settings,
+    request: Request, auth_settings: AuthSettings, app_settings: Settings
 ) -> None:
     origin = request.headers.get("origin")
     if origin is None:
@@ -72,13 +69,13 @@ def _require_allowed_origin(
 
 def _require_rate_limit_not_exceeded(limited: bool) -> None:
     if limited:
-        raise HTTPException(429, "Too many authentication attempts.", headers={"Retry-After": "900"})
+        raise HTTPException(
+            429, "Too many authentication attempts.", headers={"Retry-After": "900"}
+        )
 
 
 def _schedule_email(
-    background_tasks: BackgroundTasks,
-    settings: AuthSettings,
-    message: AuthEmail | None,
+    background_tasks: BackgroundTasks, settings: AuthSettings, message: AuthEmail | None
 ) -> None:
     if message is not None:
         background_tasks.add_task(
@@ -90,13 +87,7 @@ def _schedule_email(
         )
 
 
-def _send_email_safely(
-    settings: AuthSettings,
-    *,
-    recipient: str,
-    purpose: str,
-    token: str,
-) -> None:
+def _send_email_safely(settings: AuthSettings, *, recipient: str, purpose: str, token: str) -> None:
     try:
         send_auth_email(settings, recipient=recipient, purpose=purpose, token=token)
     except EmailDeliveryError:
@@ -109,8 +100,8 @@ def _send_email_safely(
 def _auth_page(content: str) -> HTMLResponse:
     nonce = secrets.token_urlsafe(18)
     html = (
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>SiraPilot account</title></head><body>"
         f"{content.replace('__NONCE__', nonce)}"
         "</body></html>"
@@ -166,10 +157,7 @@ def send_verification(
 ) -> Accepted:
     _require_allowed_origin(request, auth_settings, app_settings)
     message, limited = request_verification(
-        database,
-        auth_settings,
-        email=str(body.email),
-        client_ip=_client_ip(request),
+        database, auth_settings, email=str(body.email), client_ip=_client_ip(request)
     )
     _require_rate_limit_not_exceeded(limited)
     _schedule_email(background_tasks, auth_settings, message)
@@ -179,8 +167,8 @@ def send_verification(
 @router.get("/verify-email", response_class=HTMLResponse, include_in_schema=False)
 def verify_email_page() -> HTMLResponse:
     return _auth_page(
-        "<main><h1>Verify your email</h1><p id=\"status\">Checking the verification link…</p>"
-        "<script nonce=\"__NONCE__\">"
+        '<main><h1>Verify your email</h1><p id="status">Checking the verification link…</p>'
+        '<script nonce="__NONCE__">'
         "const token=location.hash.slice(1);history.replaceState(null,'',location.pathname);"
         "const status=document.getElementById('status');"
         "if(!token){status.textContent='This verification link is missing its token.';}"
@@ -266,10 +254,7 @@ def send_password_reset(
 ) -> Accepted:
     _require_allowed_origin(request, auth_settings, app_settings)
     message, limited = request_password_reset(
-        database,
-        auth_settings,
-        email=str(body.email),
-        client_ip=_client_ip(request),
+        database, auth_settings, email=str(body.email), client_ip=_client_ip(request)
     )
     _require_rate_limit_not_exceeded(limited)
     _schedule_email(background_tasks, auth_settings, message)
@@ -280,11 +265,11 @@ def send_password_reset(
 def password_reset_page() -> HTMLResponse:
     return _auth_page(
         "<main><h1>Reset your password</h1>"
-        "<form id=\"reset\"><label>New password "
-        "<input name=\"password\" type=\"password\" minlength=\"12\" maxlength=\"128\" "
-        "autocomplete=\"new-password\" required></label>"
-        "<button type=\"submit\">Update password</button></form><p id=\"status\"></p>"
-        "<script nonce=\"__NONCE__\">"
+        '<form id="reset"><label>New password '
+        '<input name="password" type="password" minlength="12" maxlength="128" '
+        'autocomplete="new-password" required></label>'
+        '<button type="submit">Update password</button></form><p id="status"></p>'
+        '<script nonce="__NONCE__">'
         "const token=location.hash.slice(1);history.replaceState(null,'',location.pathname);"
         "const form=document.getElementById('reset');const status=document.getElementById('status');"
         "form.addEventListener('submit',async e=>{e.preventDefault();"

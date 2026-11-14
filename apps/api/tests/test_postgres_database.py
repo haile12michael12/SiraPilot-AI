@@ -7,8 +7,8 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.pool import NullPool
@@ -274,7 +274,9 @@ def test_auth_lifecycle_verifies_account_and_revokes_sessions_on_password_reset(
         assert user is not None
         assert user.password_hash != "a sufficiently long password"
         token = session.scalar(
-            select(AuthToken).where(AuthToken.user_id == user.id, AuthToken.purpose == "verification")
+            select(AuthToken).where(
+                AuthToken.user_id == user.id, AuthToken.purpose == "verification"
+            )
         )
         assert token is not None
         assert token.token_hash == token_digest(email.token)
@@ -292,15 +294,13 @@ def test_auth_lifecycle_verifies_account_and_revokes_sessions_on_password_reset(
     assert not limited
     assert created is not None
     with postgres_database.session() as session:
-        assert AuthRepository(session).get_active_session(
-            token_digest(created.token), utc_now()
-        ) is not None
+        assert (
+            AuthRepository(session).get_active_session(token_digest(created.token), utc_now())
+            is not None
+        )
 
     reset_email, limited = request_password_reset(
-        postgres_database,
-        settings,
-        email="person@example.test",
-        client_ip="127.0.0.1",
+        postgres_database, settings, email="person@example.test", client_ip="127.0.0.1"
     )
     assert not limited
     assert reset_email is not None
@@ -313,9 +313,10 @@ def test_auth_lifecycle_verifies_account_and_revokes_sessions_on_password_reset(
     )
     assert updated and not limited
     with postgres_database.session() as session:
-        assert AuthRepository(session).get_active_session(
-            token_digest(created.token), utc_now()
-        ) is None
+        assert (
+            AuthRepository(session).get_active_session(token_digest(created.token), utc_now())
+            is None
+        )
     assert not verify_email(postgres_database, reset_email.token)
 
     new_login, limited = login(
@@ -340,34 +341,23 @@ def test_auth_registration_throttles_and_keeps_unknown_recovery_generic(
     )
     for _ in range(3):
         message, limited = request_verification(
-            postgres_database,
-            settings,
-            email="unknown@example.test",
-            client_ip="127.0.0.1",
+            postgres_database, settings, email="unknown@example.test", client_ip="127.0.0.1"
         )
         assert message is None and not limited
     message, limited = request_verification(
-        postgres_database,
-        settings,
-        email="unknown@example.test",
-        client_ip="127.0.0.1",
+        postgres_database, settings, email="unknown@example.test", client_ip="127.0.0.1"
     )
     assert message is None and limited
 
     message, limited = request_password_reset(
-        postgres_database,
-        settings,
-        email="unknown@example.test",
-        client_ip="127.0.0.1",
+        postgres_database, settings, email="unknown@example.test", client_ip="127.0.0.1"
     )
     assert message is None and not limited
 
 
 @pytest.mark.postgres
 def test_auth_http_routes_are_public_but_legacy_data_routes_remain_protected(
-    postgres_database: PostgresDatabase,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    postgres_database: PostgresDatabase, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     auth_settings = AuthSettings(
         public_base_url="https://testserver",
@@ -437,10 +427,13 @@ def test_auth_http_routes_are_public_but_legacy_data_routes_remain_protected(
         assert extension_login.status_code == 200
         assert extension_login.json()["token_type"] == "Bearer"
         assert extension_login.json()["access_token"]
-        assert client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {extension_login.json()['access_token']}"},
-        ).status_code == 200
+        assert (
+            client.get(
+                "/api/v1/auth/me",
+                headers={"Authorization": f"Bearer {extension_login.json()['access_token']}"},
+            ).status_code
+            == 200
+        )
     finally:
         client.close()
         application.dependency_overrides.clear()

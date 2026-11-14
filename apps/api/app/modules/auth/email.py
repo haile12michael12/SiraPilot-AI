@@ -12,14 +12,12 @@ class EmailDeliveryError(RuntimeError):
     """Raised when a configured SMTP server cannot accept an auth message."""
 
 
-def send_auth_email(
-    settings: AuthSettings,
-    *,
-    recipient: str,
-    purpose: str,
-    token: str,
-) -> None:
-    if settings.public_base_url is None or settings.email_from is None or settings.smtp_host is None:
+def send_auth_email(settings: AuthSettings, *, recipient: str, purpose: str, token: str) -> None:
+    if (
+        settings.public_base_url is None
+        or settings.email_from is None
+        or settings.smtp_host is None
+    ):
         raise RuntimeError("Authentication email settings are incomplete")
 
     action = "verify-email" if purpose == "verification" else "password-reset"

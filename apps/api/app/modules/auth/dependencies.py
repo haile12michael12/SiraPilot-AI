@@ -33,10 +33,7 @@ AuthSettingsDep = Annotated[AuthSettings, Depends(get_auth_settings)]
 AppSettingsDep = Annotated[Settings, Depends(get_app_settings)]
 
 
-def resolve_session(
-    request: Request,
-    database: DatabaseDep,
-) -> tuple[AuthSession, User]:
+def resolve_session(request: Request, database: DatabaseDep) -> tuple[AuthSession, User]:
     token = request.cookies.get("__Host-sirapilot_session")
     authorization = request.headers.get("authorization", "")
     if authorization[:7].casefold() == "bearer ":

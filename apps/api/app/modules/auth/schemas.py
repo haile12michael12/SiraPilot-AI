@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, StringConstraints, field_validator
 
 Password = Annotated[str, StringConstraints(min_length=12, max_length=128)]
 OpaqueToken = Annotated[str, StringConstraints(min_length=32, max_length=256)]

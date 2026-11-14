@@ -77,12 +77,7 @@ def _consume_limits(
 
 
 def register(
-    database: PostgresDatabase,
-    settings: AuthSettings,
-    *,
-    email: str,
-    password: str,
-    client_ip: str,
+    database: PostgresDatabase, settings: AuthSettings, *, email: str, password: str, client_ip: str
 ) -> tuple[AuthEmail | None, bool]:
     now = utc_now()
     email = email.casefold()
@@ -120,11 +115,7 @@ def register(
 
 
 def request_verification(
-    database: PostgresDatabase,
-    settings: AuthSettings,
-    *,
-    email: str,
-    client_ip: str,
+    database: PostgresDatabase, settings: AuthSettings, *, email: str, client_ip: str
 ) -> tuple[AuthEmail | None, bool]:
     now = utc_now()
     email = email.casefold()
@@ -173,12 +164,7 @@ def verify_email(database: PostgresDatabase, token: str) -> bool:
 
 
 def login(
-    database: PostgresDatabase,
-    settings: AuthSettings,
-    *,
-    email: str,
-    password: str,
-    client_ip: str,
+    database: PostgresDatabase, settings: AuthSettings, *, email: str, password: str, client_ip: str
 ) -> tuple[LoginResult | None, bool]:
     now = utc_now()
     email = email.casefold()
@@ -201,11 +187,7 @@ def login(
         user = AuthRepository(session).user_by_email(email)
         stored_hash = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
         password_matches = _verify_password(stored_hash, password)
-        if (
-            user is None
-            or user.email_verified_at is None
-            or not password_matches
-        ):
+        if user is None or user.email_verified_at is None or not password_matches:
             return None, False
         user_id, account_id, encoded_email = user.id, user.account_id, user.email
         needs_rehash = PASSWORD_HASHER.check_needs_rehash(stored_hash)
@@ -242,16 +224,12 @@ def login(
 def _verify_password(encoded_hash: str, password: str) -> bool:
     try:
         return PASSWORD_HASHER.verify(encoded_hash, password)
-    except (InvalidHashError, VerificationError, VerifyMismatchError):
+    except InvalidHashError, VerificationError, VerifyMismatchError:
         return False
 
 
 def request_password_reset(
-    database: PostgresDatabase,
-    settings: AuthSettings,
-    *,
-    email: str,
-    client_ip: str,
+    database: PostgresDatabase, settings: AuthSettings, *, email: str, client_ip: str
 ) -> tuple[AuthEmail | None, bool]:
     now = utc_now()
     email = email.casefold()
@@ -285,12 +263,7 @@ def request_password_reset(
 
 
 def reset_password(
-    database: PostgresDatabase,
-    settings: AuthSettings,
-    *,
-    token: str,
-    password: str,
-    client_ip: str,
+    database: PostgresDatabase, settings: AuthSettings, *, token: str, password: str, client_ip: str
 ) -> tuple[bool, bool]:
     now = utc_now()
     with database.transaction() as session:
