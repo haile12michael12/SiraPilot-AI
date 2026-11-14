@@ -29,19 +29,9 @@ class JobRepository:
         )
         return list(self._session.scalars(statement))
 
-    def create(
-        self,
-        *,
-        title: str | None,
-        company: str | None,
-        status: str = "new",
-    ) -> Job:
+    def create(self, *, title: str | None, company: str | None, status: str = "new") -> Job:
         job = Job(
-            id=uuid4(),
-            account_id=self._account_id,
-            title=title,
-            company=company,
-            status=status,
+            id=uuid4(), account_id=self._account_id, title=title, company=company, status=status
         )
         self._session.add(job)
         return job

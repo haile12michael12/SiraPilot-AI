@@ -31,10 +31,7 @@ def upgrade() -> None:
         "accounts",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
         sa.PrimaryKeyConstraint("id", name="pk_accounts"),
     )
@@ -52,24 +49,18 @@ def upgrade() -> None:
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("application_stale_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
         sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
-        sa.ForeignKeyConstraint(["account_id"], ["accounts.id"], name="fk_jobs_account_id_accounts"),
+        sa.ForeignKeyConstraint(
+            ["account_id"], ["accounts.id"], name="fk_jobs_account_id_accounts"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_jobs"),
         sa.UniqueConstraint("account_id", "id", name="uq_jobs_account_id"),
     )
-    op.create_index(
-        "ix_jobs_account_updated", "jobs", ["account_id", sa.text("updated_at DESC")]
-    )
+    op.create_index("ix_jobs_account_updated", "jobs", ["account_id", sa.text("updated_at DESC")])
     op.create_index(
         "ix_jobs_account_status_updated",
         "jobs",
@@ -94,22 +85,14 @@ def upgrade() -> None:
         sa.Column("availability_observed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_detail_captured_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
         sa.ForeignKeyConstraint(
-            ["account_id", "job_id"],
-            ["jobs.account_id", "jobs.id"],
-            name="fk_listings_account_job",
+            ["account_id", "job_id"], ["jobs.account_id", "jobs.id"], name="fk_listings_account_job"
         ),
         sa.PrimaryKeyConstraint("account_id", "id", name="pk_listings"),
         sa.UniqueConstraint(
-            "account_id",
-            "platform",
-            "platform_id",
-            name="uq_listings_account_platform_identity",
+            "account_id", "platform", "platform_id", name="uq_listings_account_platform_identity"
         ),
     )
     op.create_index("ix_listings_account_job", "listings", ["account_id", "job_id"])
@@ -124,9 +107,7 @@ def upgrade() -> None:
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("meta_hash", sa.String(length=64), nullable=True),
         sa.ForeignKeyConstraint(
-            ["account_id", "job_id"],
-            ["jobs.account_id", "jobs.id"],
-            name="fk_events_account_job",
+            ["account_id", "job_id"], ["jobs.account_id", "jobs.id"], name="fk_events_account_job"
         ),
         sa.ForeignKeyConstraint(
             ["account_id", "listing_id"],
@@ -135,13 +116,9 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name="pk_events"),
     )
+    op.create_index("ix_events_account_job_event", "events", ["account_id", "job_id", "event"])
     op.create_index(
-        "ix_events_account_job_event", "events", ["account_id", "job_id", "event"]
-    )
-    op.create_index(
-        "ix_events_account_job_ts",
-        "events",
-        ["account_id", "job_id", sa.text("ts DESC")],
+        "ix_events_account_job_ts", "events", ["account_id", "job_id", sa.text("ts DESC")]
     )
     op.create_index("ix_events_account_listing", "events", ["account_id", "listing_id"])
     op.create_table(
@@ -155,16 +132,10 @@ def upgrade() -> None:
         sa.Column("content", sa.Text(), nullable=True),
         sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
         sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
         sa.ForeignKeyConstraint(
             ["account_id", "job_id"],
@@ -185,10 +156,7 @@ def upgrade() -> None:
         sa.Column("platform", sa.String(length=64), server_default="*", nullable=False),
         sa.Column("label", sa.Text(), nullable=True),
         sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
         sa.ForeignKeyConstraint(
             ["account_id"], ["accounts.id"], name="fk_blocked_companies_account_id_accounts"
@@ -203,6 +171,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError(
-        "PostgreSQL migrations are forward-only; restore a verified backup instead."
-    )
+    raise RuntimeError("PostgreSQL migrations are forward-only; restore a verified backup instead.")

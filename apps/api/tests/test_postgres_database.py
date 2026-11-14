@@ -7,13 +7,12 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.pool import NullPool
 
 from alembic import command
-from alembic.config import Config
-
 from app.infra.postgres.config import PostgresSettings, load_postgres_settings
 from app.infra.postgres.models import Account
 from app.infra.postgres.repositories import JobRepository
@@ -129,9 +128,10 @@ def test_alembic_upgrade_is_repeatable_and_creates_justified_indexes(
         "blocked_companies",
         "alembic_version",
     }.issubset(inspector.get_table_names())
-    assert {
-        index["name"] for index in inspector.get_indexes("jobs")
-    } >= {"ix_jobs_account_updated", "ix_jobs_account_status_updated"}
+    assert {index["name"] for index in inspector.get_indexes("jobs")} >= {
+        "ix_jobs_account_updated",
+        "ix_jobs_account_status_updated",
+    }
     assert "fk_listings_account_job" in {
         constraint["name"] for constraint in inspector.get_foreign_keys("listings")
     }
@@ -139,10 +139,7 @@ def test_alembic_upgrade_is_repeatable_and_creates_justified_indexes(
 
 @pytest.mark.postgres
 def test_alembic_downgrade_refuses_to_drop_postgres_data(postgres_engine: Engine) -> None:
-    with (
-        pytest.raises(RuntimeError, match="forward-only"),
-        postgres_engine.connect() as connection,
-    ):
+    with pytest.raises(RuntimeError, match="forward-only"), postgres_engine.connect() as connection:
         command.downgrade(_alembic_config(connection), "base")
 
     assert "jobs" in inspect(postgres_engine).get_table_names()
@@ -221,9 +218,4 @@ def test_postgres_migration_leaves_existing_sqlite_records_accessible(
     row = conn.execute(
         "SELECT id, status, created_at, updated_at FROM jobs WHERE id = ?", (legacy_id,)
     ).fetchone()
-    assert row == (
-        legacy_id,
-        "applied",
-        "2026-01-01T00:00:00Z",
-        "2026-01-02T00:00:00Z",
-    )
+    assert row == (legacy_id, "applied", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")

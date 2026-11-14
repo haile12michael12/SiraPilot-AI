@@ -58,12 +58,7 @@ class Job(Base):
     __table_args__ = (
         UniqueConstraint("account_id", "id", name="uq_jobs_account_id"),
         Index("ix_jobs_account_updated", "account_id", desc("updated_at")),
-        Index(
-            "ix_jobs_account_status_updated",
-            "account_id",
-            "status",
-            desc("updated_at"),
-        ),
+        Index("ix_jobs_account_status_updated", "account_id", "status", desc("updated_at")),
     )
 
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -95,9 +90,7 @@ class Listing(Base):
     __tablename__ = "listings"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["account_id", "job_id"],
-            ["jobs.account_id", "jobs.id"],
-            name="fk_listings_account_job",
+            ["account_id", "job_id"], ["jobs.account_id", "jobs.id"], name="fk_listings_account_job"
         ),
         UniqueConstraint(
             "account_id", "platform", "platform_id", name="uq_listings_account_platform_identity"
@@ -117,9 +110,7 @@ class Listing(Base):
     meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    availability: Mapped[str] = mapped_column(
-        String(24), nullable=False, server_default="unknown"
-    )
+    availability: Mapped[str] = mapped_column(String(24), nullable=False, server_default="unknown")
     availability_message: Mapped[str | None] = mapped_column(Text)
     availability_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_detail_captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -134,9 +125,7 @@ class Event(Base):
     __tablename__ = "events"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["account_id", "job_id"],
-            ["jobs.account_id", "jobs.id"],
-            name="fk_events_account_job",
+            ["account_id", "job_id"], ["jobs.account_id", "jobs.id"], name="fk_events_account_job"
         ),
         ForeignKeyConstraint(
             ["account_id", "listing_id"],
@@ -156,6 +145,7 @@ class Event(Base):
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     meta_hash: Mapped[str | None] = mapped_column(String(64))
+
 
 class Document(Base):
     __tablename__ = "documents"
@@ -188,14 +178,10 @@ class Document(Base):
 
 class BlockedCompany(Base):
     __tablename__ = "blocked_companies"
-    __table_args__ = (
-        Index("ix_blocked_companies_account_platform", "account_id", "platform"),
-    )
+    __table_args__ = (Index("ix_blocked_companies_account_platform", "account_id", "platform"),)
 
     account_id: Mapped[UUID] = mapped_column(
-        PostgreSQLUUID(as_uuid=True),
-        ForeignKey("accounts.id"),
-        primary_key=True,
+        PostgreSQLUUID(as_uuid=True), ForeignKey("accounts.id"), primary_key=True
     )
     company_key: Mapped[str] = mapped_column(Text, primary_key=True)
     platform: Mapped[str] = mapped_column(String(64), primary_key=True, server_default="*")

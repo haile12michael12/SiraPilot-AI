@@ -19,9 +19,7 @@ class PostgresDatabase:
             pool_timeout=settings.pool_timeout_seconds,
         )
         self._session_factory = sessionmaker(
-            bind=self.engine,
-            autoflush=False,
-            expire_on_commit=False,
+            bind=self.engine, autoflush=False, expire_on_commit=False
         )
 
     @contextmanager
