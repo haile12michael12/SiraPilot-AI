@@ -29,7 +29,7 @@ pnpm run build:web
 | Path | Responsibility |
 | --- | --- |
 | `src/app/` | Workspaces, navigation, global shortcuts, build checks, and application dialogs |
-| `src/features/` | Jobs, Documents, Blocked companies, Extension settings, and Form Fill |
+| `src/features/` | Authentication, Jobs, Documents, Blocked companies, Extension settings, and Form Fill |
 | Feature `client.ts` | Endpoint adapters |
 | Feature `queries.ts` | Query keys/options, mutations, polling, invalidation, and cache cleanup |
 | `src/infra/http.ts` | Shared HTTP transport bound to `/api` |
@@ -38,7 +38,9 @@ pnpm run build:web
 
 Feature code does not import the application shell; shared code and transport do not import features. `src/app/sourceBoundaries.test.ts` enforces these directions for public production imports, re-exports, import types, and literal dynamic imports. Platform metadata remains a lower integration surface; its private discovery stays intact and installed overlay files are excluded from this source check. Documents invalidate the Jobs detail key after writes.
 
-The shared transport reads failed response bodies once. `ApiError` parses the standard envelope into code, safe message, request ID, details, and validation issues; legacy server bodies retain their existing parsing and raw message fallback. Shared UI maps known codes to local messages. Form Fill projects `details.current` for standard conflicts and retains the legacy `detail ?? payload` fallback, then creates a feature error with safe global wording, code/request ID, and no transport payload or private details.
+The shared transport reads failed response bodies once and includes same-origin credentials for the PostgreSQL auth session cookie. `features/auth/` owns OpenAPI-typed account requests and session query/mutation services; the browser manages the HttpOnly cookie and the dashboard never stores bearer tokens. `ApiError` parses the standard envelope into code, safe message, request ID, details, and validation issues; legacy server bodies retain their existing parsing and raw message fallback. Shared UI maps known codes to local messages. Form Fill projects `details.current` for standard conflicts and retains the legacy `detail ?? payload` fallback, then creates a feature error with safe global wording, code/request ID, and no transport payload or private details.
+
+The PostgreSQL auth endpoints are optional and do not authorize the existing job API. This integration provides transport and typed auth primitives only; it does not gate the dashboard or imply that login protects legacy job data.
 
 Each owner keeps typed UI text and complete count/grammar functions in `copy.ts`; shortcut help belongs to the application shell. User-authored data and protocol values stay separate from display copy. `shared/format.ts` centralizes browser-local date/time display, preserving the browser's locale and time zone and the Form Fill invalid-date fallback. Protocol timestamps and build identity are separate from display formatting.
 

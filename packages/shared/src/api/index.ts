@@ -12,6 +12,17 @@ type Schemas = components["schemas"];
 // Require their presence while preserving nullable values.
 type Read<T> = Required<T>;
 
+export type AuthenticatedUser = Read<Schemas["AuthenticatedUser"]>;
+export type AuthLoginRequest = Schemas["LoginRequest"];
+export type AuthLoginResponse = Schemas["LoginResponse"];
+export type AuthRegistrationRequest = Schemas["Registration"];
+export type AuthVerificationRequest = Schemas["VerificationRequest"];
+export type AuthTokenRequest = Schemas["TokenRequest"];
+export type AuthPasswordResetRequest = Schemas["PasswordReset"];
+export type AuthAccepted = Read<Schemas["Accepted"]>;
+export type AuthVerified = Read<Schemas["Verified"]>;
+export type AuthPasswordUpdated = Read<Schemas["PasswordUpdated"]>;
+
 // Stored jobs carry settled funnel statuses; narrow them for exhaustive client use.
 // ListingState also represents synthetic untracked results and keeps string status.
 export type Job = Omit<Read<Schemas["Job"]>, "status"> & { status: Status };

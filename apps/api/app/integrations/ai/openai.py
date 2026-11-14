@@ -66,7 +66,7 @@ class OpenAICompatibleAdapter:
                 "json_schema": {
                     "name": "structured_response",
                     "strict": True,
-                    "schema": _strict_schema(request.response_schema),
+                    "schema": _strict_schema(request.response_schema, self.provider_name),
                 },
             }
         else:
@@ -123,14 +123,20 @@ class OpenAIAdapter(OpenAICompatibleAdapter):
         )
 
 
-def _strict_schema(value: Any) -> Any:
+def _strict_schema(value: Any, provider_name: str) -> Any:
     if isinstance(value, list):
-        return [_strict_schema(item) for item in value]
+        return [_strict_schema(item, provider_name) for item in value]
     if not isinstance(value, dict):
         return value
+    if not value:
+        raise AIProviderError(provider_name, "unsupported_output_schema")
 
-    schema = {key: _strict_schema(item) for key, item in value.items() if key != "default"}
+    schema = {
+        key: _strict_schema(item, provider_name) for key, item in value.items() if key != "default"
+    }
     if schema.get("type") == "object":
+        if "additionalProperties" in schema and schema["additionalProperties"] is not False:
+            raise AIProviderError(provider_name, "unsupported_output_schema")
         properties = schema.get("properties", {})
         schema["required"] = list(properties)
         schema["additionalProperties"] = False

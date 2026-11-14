@@ -1,7 +1,7 @@
 export const copy = {
   apiErrors: {
     bad_request: "The request could not be accepted.",
-    unauthorized: "The server requires a valid API key.",
+    unauthorized: "Authentication failed. Check your sign-in details or API key.",
     forbidden: "This action is not allowed.",
     not_found: "This item could not be found.",
     method_not_allowed: "This action is not supported.",

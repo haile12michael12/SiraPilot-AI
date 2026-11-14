@@ -10,9 +10,14 @@ import pytest
 from pydantic import BaseModel, ConfigDict, SecretStr
 
 from app.ai.contracts import AIMessage, GeneratedResponse, GenerationRequest
-from app.ai.errors import AIConfigurationError, AIOutputValidationError, PromptInputError
+from app.ai.errors import (
+    AIConfigurationError,
+    AIOutputValidationError,
+    AIProviderError,
+    PromptInputError,
+)
 from app.ai.evaluation.runner import EvaluationCase, evaluate_cases
-from app.ai.orchestration.agents import AgentOrchestrator, AgentTool
+from app.ai.orchestration.agents import AgentDecision, AgentOrchestrator, AgentTool
 from app.ai.prompts.registry import PromptDefinition, PromptRegistry
 from app.ai.providers.protocol import ProviderRequest
 from app.ai.usage import UsageRecord
@@ -152,6 +157,76 @@ def test_invalid_structured_output_is_recorded_before_error() -> None:
     asyncio.run(exercise())
 
 
+def test_agent_decision_schema_is_compatible_with_openai_strict_outputs() -> None:
+    async def exercise() -> None:
+        captured: dict[str, Any] = {}
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            captured["payload"] = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": (
+                                    '{"kind":"tool_call","response":null,'
+                                    '"tool_name":"create_profile",'
+                                    '"arguments":"{\\"name\\":\\"candidate\\"}",'
+                                    '"summary":"Create a profile."}'
+                                )
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ]
+                },
+            )
+
+        settings = Settings(
+            ai_model_routes={"drafting": AIModelRoute(provider="openai", model="configured-model")},
+            ai_openai_api_key=SecretStr("test-secret"),
+        )
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            service = build_ai_service(
+                settings, usage_recorder=MemoryUsageRecorder(), client=client
+            )
+            result = await service.generate(_request(), AgentDecision)
+
+        schema = captured["payload"]["response_format"]["json_schema"]["schema"]
+        argument_schema = schema["properties"]["arguments"]
+        assert any(item.get("type") == "string" for item in argument_schema["anyOf"])
+        assert result.value.arguments == '{"name":"candidate"}'
+
+    asyncio.run(exercise())
+
+
+def test_openai_rejects_arbitrary_object_schemas_before_request() -> None:
+    class DynamicOutput(BaseModel):
+        values: dict[str, str]
+
+    async def exercise() -> None:
+        requests: list[httpx.Request] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(500)
+
+        settings = Settings(
+            ai_model_routes={"drafting": AIModelRoute(provider="openai", model="configured-model")},
+            ai_openai_api_key=SecretStr("test-secret"),
+        )
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            service = build_ai_service(
+                settings, usage_recorder=MemoryUsageRecorder(), client=client
+            )
+            with pytest.raises(AIProviderError, match="unsupported_output_schema"):
+                await service.generate(_request(), DynamicOutput)
+
+        assert requests == []
+
+    asyncio.run(exercise())
+
+
 def test_anthropic_adapter_uses_structured_tool_and_normalizes_usage() -> None:
     async def exercise() -> None:
         captured: dict[str, Any] = {}
@@ -265,7 +340,7 @@ def test_agent_returns_consequential_action_for_approval() -> None:
                 {
                     "kind": "tool_call",
                     "tool_name": "create_profile",
-                    "arguments": {"name": "candidate"},
+                    "arguments": '{"name":"candidate"}',
                     "summary": "Create a profile.",
                 }
             ]

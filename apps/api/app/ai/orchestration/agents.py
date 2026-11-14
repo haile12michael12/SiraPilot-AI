@@ -22,7 +22,7 @@ class AgentDecision(BaseModel):
     kind: Literal["final", "tool_call"]
     response: str | None = Field(default=None, max_length=20_000)
     tool_name: str | None = Field(default=None, max_length=64)
-    arguments: dict[str, Any] | None = None
+    arguments: str | None = Field(default=None, max_length=100_000)
     summary: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
@@ -36,10 +36,11 @@ class AgentDecision(BaseModel):
             self.response is not None
             or self.tool_name is None
             or self.arguments is None
+            or not self.arguments.strip()
             or self.summary is None
             or not self.summary.strip()
         ):
-            raise ValueError("Agent tool calls require a name, arguments, and summary")
+            raise ValueError("Agent tool calls require a name, JSON arguments, and summary")
         return self
 
 
@@ -124,8 +125,9 @@ class AgentOrchestrator:
                 role="system",
                 content=(
                     "Choose a final response or one tool call. Use only a listed tool and its "
-                    "declared arguments. A consequential tool requires user approval; never "
-                    "claim that a proposed action has been executed.\nAvailable tools:\n" + catalog
+                    "declared arguments. Encode arguments as a JSON object in the arguments "
+                    "string. A consequential tool requires user approval; never claim that a "
+                    "proposed action has been executed.\nAvailable tools:\n" + catalog
                 ),
             ),
             *request.messages,
@@ -153,10 +155,16 @@ class AgentOrchestrator:
 
             tool = self._tools.resolve(decision.tool_name or "")
             try:
+                raw_arguments = json.loads(decision.arguments or "")
+            except json.JSONDecodeError, RecursionError:
+                raise AgentError("Agent tool arguments were not valid JSON") from None
+            if not isinstance(raw_arguments, dict):
+                raise AgentError("Agent tool arguments must be a JSON object")
+            try:
                 arguments = tool.input_model.model_validate(
-                    decision.arguments, strict=True, extra="forbid"
+                    raw_arguments, strict=True, extra="forbid"
                 )
-            except ValidationError:
+            except ValidationError, RecursionError:
                 raise AgentError(
                     "Agent tool arguments did not match the declared input schema"
                 ) from None
