@@ -239,6 +239,22 @@ The [API layout](../apps/api/README.md#layout) owns the file-level responsibilit
 
 Platform-specific fields remain in a listing's JSON metadata until they become stable query or reporting dimensions. Funnel state and other invariants stay in typed columns rather than in open metadata.
 
+## AI architecture
+
+AI is an application capability behind provider-neutral contracts, not a dependency that feature business logic calls directly. The target boundary is `app/ai/` for use-case services, contracts, prompt versions, validation, orchestration, usage records, and evaluations, and `app/integrations/ai/` for provider adapters. These are architectural boundaries, not empty packages to create before a concrete AI use case is implemented.
+
+An AI service receives a typed, feature-owned request and the required output schema. It validates and minimizes the supplied context, selects a versioned prompt and configured model alias, then asks a provider registry for an adapter implementing one common generation interface. The interface accepts provider-independent instructions, input data, output constraints, and bounded generation options; it returns normalized content, finish status, model identity, and reported usage. Provider SDK types and vendor-specific payloads remain inside adapters.
+
+The registry maps configured aliases to providers and models. OpenAI and Anthropic adapters implement the same contract; a local-model adapter is optional and must be explicitly configured. Credentials come from deployment secret configuration, never source code or feature logic. Missing configuration, provider errors, unsupported output modes, and exhausted limits are explicit failures. Do not silently switch providers or models, because doing so can change privacy, behavior, and cost.
+
+Prefer structured responses constrained by a schema. Parse and validate every model response into the feature's typed output before returning it; malformed, incomplete, or out-of-policy output is an error, not a success-shaped fallback. Feature services remain responsible for domain validation and persistence. Model output is untrusted input and cannot itself authorize a domain change.
+
+Agent orchestration is bounded by step, tool, and time limits. Agents may propose typed tool calls, but tools expose only narrow application use cases and enforce the same authorization and validation as ordinary requests. Consequential actions—such as submitting an application, sending a message, or changing user data—must be presented for explicit user approval before execution. A model response or agent plan is never approval.
+
+Record usage by request, feature, provider, model, and prompt version, including reported input/output tokens, latency, and cost with its currency and pricing-table version. Mark estimated costs as estimates. Keep API keys, raw prompts, model output, and private user context out of operational logs and usage records; apply the existing privacy and retention rules to any content a feature must persist.
+
+Test provider-independent services with deterministic fake providers. Add adapter contract tests for normalized errors, structured output, usage, and limits; evaluate prompt changes against versioned, synthetic cases and explicit quality thresholds. Default CI must not make live provider calls or require secrets. Provider integration and prompt evaluation details live in [Prompt management and AI evaluation](ai/PROMPTS.md). No AI provider or adapter is currently enabled by this architecture alone.
+
 ## Database and synchronization
 
 The API supports three connection modes:

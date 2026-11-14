@@ -213,6 +213,8 @@ app/
 ├── modules/      business features and explicit application/query owners
 ├── infra/        SQLite/libSQL access and the separate PostgreSQL target
 │   └── postgres/ SQLAlchemy models, sessions, transactions, repositories
+├── ai/           provider-neutral contracts, prompts, services, agents, evaluation
+├── integrations/ provider-specific AI adapters and external service clients
 ├── platform/     HTTP mechanisms, request dependencies, runtime and logging
 ├── shared/       pure enums, errors, identity, text, time, hashing and similarity
 ├── maintenance/  offline snapshots, restore and checkout adoption
@@ -283,12 +285,26 @@ Direct development reads this directory's `.env`. Source and packaged profiles i
 | `WEB_PUSH_ENABLED` | `true` | Offer browser Web Push subscriptions and send unacknowledged alerts. |
 | `WEB_PUSH_SUBJECT` | Project GitHub HTTPS URL | VAPID contact URI for browser push providers. |
 | `NOTIFICATION_SCHEDULER_ENABLED` | `true` | Publish due notifications on this instance; enable on exactly one instance per synchronized database. |
+| `AI_MODEL_ROUTES` | `{}` | JSON map of logical model aliases to provider/model routes and optional pricing; empty disables AI. |
+| `AI_OPENAI_API_KEY` | unset | Secret required when an OpenAI route is configured. |
+| `AI_ANTHROPIC_API_KEY` | unset | Secret required when an Anthropic route is configured. |
+| `AI_LOCAL_BASE_URL` | unset | OpenAI-compatible URL required for a local model route. |
+| `AI_LOCAL_API_KEY` | unset | Optional secret for a protected local model endpoint. |
+| `AI_REQUEST_TIMEOUT_SECONDS` | `30` | Per-request provider timeout, bounded to 120 seconds. |
+| `AI_MAX_OUTPUT_TOKENS` | `2048` | Maximum output-token budget applied to every generation request. |
+| `AI_MAX_INPUT_CHARACTERS` | `100000` | Maximum combined prompt and context size. |
+| `AI_MAX_AGENT_STEPS` | `8` | Maximum model turns in one agent run. |
+| `AI_MAX_AGENT_TOOL_CALLS` | `6` | Maximum tool calls in one agent run. |
 
 Initial thresholds must be non-negative integers. Startup seeds `settings.application_staleness` once; saved preferences then remain authoritative across configuration changes and restarts. Change Applied/In process days through Stale applications settings or revision-checked `PATCH /api/settings`; zero disables a stage and saving reconciles existing job deadlines and notification schedules.
 
 Shared preferences store `application_staleness.notification_time` (`HH:MM`), `timezone` (IANA, automatically reported by the active dashboard), `applied_notifications` and `in_process_notifications` (`on|muted|off`), plus `notifications.muted`. Muted publications retain unread inbox entries and get `alert_suppressed_at` rather than a delivery/read receipt; they are excluded from retries. Off cancels/resolves the stage’s automatic notification without changing its stale deadline or badge. A minute worker publishes due reminders and retries unsuppressed, unacknowledged alerts; no retry counters are stored.
 
 Web Push generates `web-push-private.pem` in the installation state directory with mode 0600; preserve it across upgrades. Database backups contain subscriptions, but do not contain this private key. Losing it requires affected browsers to turn notifications off/on to subscribe again. Only supported browser-vendor HTTPS endpoints are accepted. Outbound vendor requests use encrypted payloads and bounded timeouts; successful provider acceptance does not mark a notification delivered. The API must remain running and reachable by the browser service worker for verified background presentation and acknowledgment. Phone browser subscriptions require HTTPS; iOS/iPadOS requires Home Screen installation. This capability does not change the [localhost/trusted-network deployment boundary](../../SECURITY.md).
+
+AI is disabled until at least one route and its provider configuration are supplied. For example, `AI_MODEL_ROUTES` can map a feature alias to `{"provider":"openai","model":"<provider-model-id>"}`; use `AI_OPENAI_API_KEY` from a deployment secret store or an ignored local `.env`, never source code. Anthropic routes use `AI_ANTHROPIC_API_KEY`. The optional local adapter requires `AI_LOCAL_BASE_URL` and accepts `AI_LOCAL_API_KEY` when needed. Model aliases keep feature code independent of providers; provider/model changes are explicit configuration changes, not silent fallbacks.
+
+Routes may include `input_cost_per_million`, `output_cost_per_million`, `currency`, and `pricing_version`. Prices are deployment-maintained estimates, not provider billing guarantees. `build_ai_service` requires a `UsageRecorder`; every completed provider response is recorded with its alias, provider/model, feature, prompt version, token usage, latency, and available estimated cost before schema validation is returned. The recorder must not retain prompts or model content. Use the service as an async context manager when it creates its HTTP client. See the [AI architecture](../../docs/ARCHITECTURE.md#ai-architecture) and [prompt evaluation guidance](../../docs/ai/PROMPTS.md).
 
 ## Security
 

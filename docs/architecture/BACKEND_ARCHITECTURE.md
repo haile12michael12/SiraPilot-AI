@@ -26,13 +26,14 @@ The approved redesign moves toward the following ownership:
 | `app/api/` | Public transport, API versions, and request/response contracts |
 | `app/core/` | Settings, authentication/authorization primitives, errors, logging, and middleware |
 | `app/modules/` | Implemented product capabilities, each with explicit ownership rules |
+| `app/ai/` | Provider-neutral AI services, contracts, prompts, validation, orchestration, usage, and evaluations |
 | `app/infra/postgres/` | Implemented opt-in PostgreSQL models, sessions, transactions, and repositories |
 | `apps/api/alembic/` | PostgreSQL-only, forward-only Alembic migrations |
 | `app/infrastructure/` | Cache, queue, storage, and telemetry adapters as needed |
-| `app/integrations/` | Browser, email, calendar, job board, and AI provider boundaries |
+| `app/integrations/` | Browser, email, calendar, job board, and provider-specific AI adapters |
 | `app/shared/` | Cross-module schemas, enums, constants, and pure utilities |
 
-This is a destination for real implementations, not a checklist for generating empty modules. Existing responsibilities should move in small, tested steps; module names alone do not define new product behavior.
+This is a destination for real implementations, not a checklist for generating empty modules. Existing responsibilities should move in small, tested steps; module names alone do not define new product behavior. The [AI architecture](../../ARCHITECTURE.md#ai-architecture) defines the provider boundary and safety requirements.
 
 ## Backend modules
 
