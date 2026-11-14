@@ -3,12 +3,14 @@
 from typing import Annotated, cast
 
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.infra.postgres.config import AuthSettings
 from app.infra.postgres.sessions import PostgresDatabase
 from app.modules.auth.models import AuthSession, User
+from app.modules.auth.repository import AuthRepository
+from app.modules.auth.service import token_digest
+from app.shared.timeutil import utc_now
 
 
 def get_postgres_database(request: Request) -> PostgresDatabase:
@@ -34,17 +36,13 @@ AppSettingsDep = Annotated[Settings, Depends(get_app_settings)]
 def resolve_session(
     request: Request,
     database: DatabaseDep,
-) -> tuple[Session, AuthSession, User]:
+) -> tuple[AuthSession, User]:
     token = request.cookies.get("__Host-sirapilot_session")
     authorization = request.headers.get("authorization", "")
-    if token is None and authorization.startswith("Bearer "):
+    if authorization[:7].casefold() == "bearer ":
         token = authorization[7:]
     if not token:
         raise HTTPException(401, "Authentication required.")
-
-    from app.modules.auth.repository import AuthRepository
-    from app.modules.auth.service import token_digest
-    from app.shared.timeutil import utc_now
 
     with database.session() as session:
         result = AuthRepository(session).get_active_session(token_digest(token), utc_now())
@@ -55,14 +53,13 @@ def resolve_session(
             raise HTTPException(401, "Authentication required.")
         session.expunge(auth_session)
         session.expunge(user)
-        return session, auth_session, user
+    return auth_session, user
 
 
 def get_current_identity(
-    identity: Annotated[tuple[Session, AuthSession, User], Depends(resolve_session)],
+    identity: Annotated[tuple[AuthSession, User], Depends(resolve_session)],
 ) -> tuple[AuthSession, User]:
-    _, auth_session, user = identity
-    return auth_session, user
+    return identity
 
 
 CurrentIdentityDep = Annotated[tuple[AuthSession, User], Depends(get_current_identity)]

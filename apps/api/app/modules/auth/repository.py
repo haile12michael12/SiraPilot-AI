@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import case, select, text, update
+from sqlalchemy import case, delete, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -54,6 +54,9 @@ class AuthRepository:
         now: datetime,
     ) -> None:
         self._session.execute(
+            delete(AuthToken).where(AuthToken.expires_at < now - timedelta(days=30))
+        )
+        self._session.execute(
             update(AuthToken)
             .where(
                 AuthToken.user_id == user_id,
@@ -96,7 +99,14 @@ class AuthRepository:
         user_id: UUID,
         token_hash: str,
         expires_at: datetime,
+        now: datetime,
     ) -> AuthSession:
+        self._session.execute(
+            delete(AuthSession).where(
+                (AuthSession.revoked_at < now - timedelta(days=30))
+                | (AuthSession.expires_at < now - timedelta(days=30))
+            )
+        )
         auth_session = AuthSession(
             id=uuid4(), user_id=user_id, token_hash=token_hash, expires_at=expires_at
         )
@@ -138,6 +148,9 @@ class AuthRepository:
         window: timedelta,
     ) -> int:
         expired_before = now - window
+        self._session.execute(
+            delete(AuthRateLimit).where(AuthRateLimit.window_started_at < now - timedelta(days=1))
+        )
         statement = insert(AuthRateLimit).values(
             bucket_hash=bucket_hash,
             window_started_at=now,

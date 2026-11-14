@@ -6,6 +6,12 @@ One version covers the whole product. The extension, the dashboard, and the serv
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-14
+
+### Added
+
+- Opt-in PostgreSQL account authentication with Argon2id credentials, email verification and password recovery, persistent rate limits, and hashed revocable sessions. Existing SQLite/libSQL/Turso routes and data remain unchanged and are not authorized by these sessions.
+
 ## [2.0.0] - 2026-11-11
 
 ### Added

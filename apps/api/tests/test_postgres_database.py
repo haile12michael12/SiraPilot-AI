@@ -7,16 +7,34 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.pool import NullPool
 
 from alembic import command
-from app.infra.postgres.config import PostgresSettings, load_postgres_settings
+from app.config import Settings
+from app.core.paths import settings_paths
+from app.infra.postgres.config import AuthSettings, PostgresSettings, load_postgres_settings
 from app.infra.postgres.models import Account
 from app.infra.postgres.repositories import JobRepository
 from app.infra.postgres.sessions import PostgresDatabase
+from app.main import create_app
+from app.modules.auth.dependencies import get_auth_settings, get_postgres_database
+from app.modules.auth.models import AuthToken
+from app.modules.auth.repository import AuthRepository
+from app.modules.auth.service import (
+    login,
+    register,
+    request_password_reset,
+    request_verification,
+    reset_password,
+    token_digest,
+    verify_email,
+)
+from app.platform.runtime import RuntimeResources
+from app.shared.timeutil import utc_now
 
 API_ROOT = Path(__file__).resolve().parents[1]
 
@@ -121,6 +139,10 @@ def test_alembic_upgrade_is_repeatable_and_creates_justified_indexes(
     inspector = inspect(postgres_engine)
     assert {
         "accounts",
+        "users",
+        "auth_tokens",
+        "auth_sessions",
+        "auth_rate_limits",
         "jobs",
         "listings",
         "events",
@@ -219,3 +241,183 @@ def test_postgres_migration_leaves_existing_sqlite_records_accessible(
         "SELECT id, status, created_at, updated_at FROM jobs WHERE id = ?", (legacy_id,)
     ).fetchone()
     assert row == (legacy_id, "applied", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+
+
+@pytest.mark.postgres
+def test_auth_lifecycle_verifies_account_and_revokes_sessions_on_password_reset(
+    postgres_database: PostgresDatabase,
+) -> None:
+    settings = AuthSettings(
+        public_base_url="https://auth.example.test",
+        email_from="no-reply@example.test",
+        smtp_host="smtp.example.test",
+        rate_limit_secret="rate-limit-secret-value-32-characters",
+    )
+    email, limited = register(
+        postgres_database,
+        settings,
+        email="person@example.test",
+        password="a sufficiently long password",
+        client_ip="127.0.0.1",
+    )
+    assert not limited
+    assert email is not None
+    with postgres_database.session() as session:
+        user = AuthRepository(session).user_by_email("person@example.test")
+        assert user is not None
+        assert user.password_hash != "a sufficiently long password"
+        token = session.scalar(
+            select(AuthToken).where(AuthToken.user_id == user.id, AuthToken.purpose == "verification")
+        )
+        assert token is not None
+        assert token.token_hash == token_digest(email.token)
+        assert email.token not in token.token_hash
+
+    assert verify_email(postgres_database, email.token)
+    assert not verify_email(postgres_database, email.token)
+    created, limited = login(
+        postgres_database,
+        settings,
+        email="person@example.test",
+        password="a sufficiently long password",
+        client_ip="127.0.0.1",
+    )
+    assert not limited
+    assert created is not None
+    with postgres_database.session() as session:
+        assert AuthRepository(session).get_active_session(
+            token_digest(created.token), utc_now()
+        ) is not None
+
+    reset_email, limited = request_password_reset(
+        postgres_database,
+        settings,
+        email="person@example.test",
+        client_ip="127.0.0.1",
+    )
+    assert not limited
+    assert reset_email is not None
+    updated, limited = reset_password(
+        postgres_database,
+        settings,
+        token=reset_email.token,
+        password="a different long password",
+        client_ip="127.0.0.1",
+    )
+    assert updated and not limited
+    with postgres_database.session() as session:
+        assert AuthRepository(session).get_active_session(
+            token_digest(created.token), utc_now()
+        ) is None
+    assert not verify_email(postgres_database, reset_email.token)
+
+    new_login, limited = login(
+        postgres_database,
+        settings,
+        email="person@example.test",
+        password="a different long password",
+        client_ip="127.0.0.1",
+    )
+    assert new_login is not None and not limited
+
+
+@pytest.mark.postgres
+def test_auth_registration_throttles_and_keeps_unknown_recovery_generic(
+    postgres_database: PostgresDatabase,
+) -> None:
+    settings = AuthSettings(
+        public_base_url="https://auth.example.test",
+        email_from="no-reply@example.test",
+        smtp_host="smtp.example.test",
+        rate_limit_secret="rate-limit-secret-value-32-characters",
+    )
+    for _ in range(3):
+        message, limited = request_verification(
+            postgres_database,
+            settings,
+            email="unknown@example.test",
+            client_ip="127.0.0.1",
+        )
+        assert message is None and not limited
+    message, limited = request_verification(
+        postgres_database,
+        settings,
+        email="unknown@example.test",
+        client_ip="127.0.0.1",
+    )
+    assert message is None and limited
+
+    message, limited = request_password_reset(
+        postgres_database,
+        settings,
+        email="unknown@example.test",
+        client_ip="127.0.0.1",
+    )
+    assert message is None and not limited
+
+
+@pytest.mark.postgres
+def test_auth_http_routes_are_public_but_legacy_data_routes_remain_protected(
+    postgres_database: PostgresDatabase,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_settings = AuthSettings(
+        public_base_url="https://testserver",
+        email_from="no-reply@example.test",
+        smtp_host="smtp.example.test",
+        rate_limit_secret="rate-limit-secret-value-32-characters",
+    )
+    settings = Settings(
+        _env_file=None,
+        app_env="local",
+        db_path=str(tmp_path / "jobs.db"),
+        web_dist_path=tmp_path / "missing-dashboard",
+        api_key="protected-key",
+        turso_auth_token=None,
+        turso_database_url=None,
+    )
+    paths = settings_paths(
+        settings,
+        environ={
+            "JOB_TRACKER_PROFILE": "direct",
+            "JOB_TRACKER_DATA_DIR": str(tmp_path),
+            "JOB_TRACKER_CONFIG_DIR": str(tmp_path / "config"),
+            "JOB_TRACKER_STATE_DIR": str(tmp_path / "state"),
+            "JOB_TRACKER_BACKUP_DIR": str(tmp_path / "backups"),
+        },
+    )
+    application = create_app(settings, resources=RuntimeResources(paths))
+    application.dependency_overrides[get_postgres_database] = lambda: postgres_database
+    application.dependency_overrides[get_auth_settings] = lambda: auth_settings
+    sent: list[str] = []
+    monkeypatch.setattr(
+        "app.modules.auth.router.send_auth_email",
+        lambda settings, *, recipient, purpose, token: sent.append(token),
+    )
+
+    client = TestClient(application, base_url="https://testserver")
+    try:
+        registration = client.post(
+            "/api/v1/auth/register",
+            json={"email": "browser@example.test", "password": "a sufficiently long password"},
+        )
+        assert registration.status_code == 202
+        assert client.get("/api/jobs").status_code == 401
+        assert len(sent) == 1
+
+        verified = client.post("/api/v1/auth/verify-email", json={"token": sent.pop()})
+        assert verified.status_code == 200
+        logged_in = client.post(
+            "/api/v1/auth/sessions",
+            json={"email": "browser@example.test", "password": "a sufficiently long password"},
+        )
+        assert logged_in.status_code == 200
+        assert "access_token" not in logged_in.json()
+        assert logged_in.cookies.get("__Host-sirapilot_session")
+        assert client.get("/api/v1/auth/me").json()["email"] == "browser@example.test"
+        assert client.post("/api/v1/auth/logout").status_code == 204
+        assert client.get("/api/v1/auth/me").status_code == 401
+    finally:
+        client.close()
+        application.dependency_overrides.clear()

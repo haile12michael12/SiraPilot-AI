@@ -298,13 +298,13 @@ Proportionate to a local personal tool, not a hardened public service:
 - **`TrustedHostMiddleware`** — rejects requests whose `Host` header isn't `Settings.trusted_hosts` (DNS-rebinding guard).
 - **Optional `X-API-Key`** — leave `API_KEY` unset for the normal local setup. When set, every `/api/*` request must carry a matching header or get a `401`; `/docs` and `/openapi.json` stay ungated. Neither the dashboard nor the extension stores or transmits it, so neither can talk to a gated server directly. Use it only behind a trusted intermediary that injects the header, or for scripts that send it themselves.
 
-This is not a supported public-internet authentication model. If the service is made reachable beyond the local machine, put it behind HTTPS and a proper VPN/reverse-proxy identity layer rather than treating the shared key as a login.
+The current SQLite/libSQL/Turso API remains a local single-user application; neither its optional shared key nor the PostgreSQL account authentication routes authorize its private data endpoints. The PostgreSQL authentication routes are an opt-in foundation only and do not make those legacy endpoints safe for multi-user exposure. Do not expose the current API publicly or treat a successful PostgreSQL login as access control for legacy routes.
 
 ## Database
 
 ### PostgreSQL target foundation (opt-in)
 
-The PostgreSQL layer is separate from the running SQLite/libSQL/Turso application. It contains account-scoped SQLAlchemy models, a session/transaction manager, a job repository, and an Alembic baseline. It has no authentication endpoints, does not import existing data, and is never initialized at API startup. Setting `POSTGRES_DATABASE_URL` does not switch the current API away from `DB_PATH` or Turso.
+The PostgreSQL layer is separate from the running SQLite/libSQL/Turso application. It contains account-scoped SQLAlchemy models, a session/transaction manager, a job repository, PostgreSQL authentication endpoints, and append-only Alembic revisions. Setting `POSTGRES_DATABASE_URL` enables the authentication service but does not switch current private API routes away from `DB_PATH` or Turso. Startup creates a separate PostgreSQL engine only when configured; it never runs Alembic or imports existing data.
 
 Use a newly provisioned, empty PostgreSQL schema for this target. The initial migration refuses a schema containing existing tables. The URL must use the `postgresql+psycopg://` driver and should be supplied through a secret manager or protected process environment, not committed to `.env` files or source control. The Alembic baseline only creates its target tables and indexes; it does not change SQLite/Turso records.
 
@@ -315,6 +315,20 @@ uv run alembic upgrade head
 ```
 
 Migrations are forward-only. Do not use `alembic downgrade` as rollback; restore a verified PostgreSQL backup to a separate database instead. Do not point Alembic at the current SQLite/Turso database. PostgreSQL integration tests require `POSTGRES_TEST_URL` to reference a loopback database whose name ends in `_test`; they create and remove only a uniquely named test schema there.
+
+#### Authentication API
+
+The authentication API is available at `/api/v1/auth/*` only when PostgreSQL and all required `AUTH_*` settings are configured. Apply the Alembic revisions before starting the API. Required settings are `AUTH_PUBLIC_BASE_URL` (HTTPS), `AUTH_EMAIL_FROM`, `AUTH_SMTP_HOST`, and `AUTH_RATE_LIMIT_SECRET` (at least 32 characters). SMTP defaults to STARTTLS on port 587; `AUTH_SMTP_USERNAME` and `AUTH_SMTP_PASSWORD` must be supplied together. Implicit SSL can be selected with `AUTH_SMTP_USE_SSL=true` and `AUTH_SMTP_STARTTLS=false`. Keep credentials and the rate-limit secret in a secret manager or protected process environment.
+
+Registration creates an unverified PostgreSQL account and sends a one-time email-verification link. Password recovery sends a one-time reset link; both token types expire and only their hashes are stored. Passwords must be 12–128 characters and are hashed with Argon2id. Persistent rate limits use a keyed digest of the account identifier or client IP. SMTP failures are logged without email addresses or tokens; the caller can retry the generic verification or recovery request.
+
+- `POST /api/v1/auth/register` and `POST /api/v1/auth/verification-requests` accept `{email, password}` and `{email}` respectively and return a generic `202`.
+- `GET` and `POST /api/v1/auth/verify-email` serve and confirm the email link.
+- `POST /api/v1/auth/sessions` verifies credentials. The dashboard receives a Secure, HttpOnly, SameSite cookie; the configured extension origin receives an opaque bearer token in the response.
+- `POST /api/v1/auth/password-reset-requests`, `GET /api/v1/auth/password-reset`, and `POST /api/v1/auth/password-resets` implement recovery. Password reset revokes the user's existing sessions.
+- `GET /api/v1/auth/me` resolves the active verified account; `POST /api/v1/auth/logout` revokes the current session.
+
+These routes intentionally bypass the legacy optional `X-API-Key` dependency so that account creation and sign-in can start without an existing key. This does **not** make a session a principal for the rest of the API: existing private routes retain their current local-only behavior and must not be exposed as multi-user endpoints until every resource and operation is owner-scoped and authorized.
 
 See the [PostgreSQL schema](../../docs/database/DATABASE_SCHEMA.md), [migration strategy](../../docs/database/MIGRATION_STRATEGY.md), and [backup procedures](#postgresql-target-backup--restore).
 

@@ -21,13 +21,20 @@ The target repository structure introduces users, profiles, authentication, Post
 
 ## Required follow-up design
 
-Before implementing registration or private endpoints, document and test:
+The first authentication slice has documented and tested the following choices:
 
-- password hashing, email verification, account recovery, registration abuse controls, and credential-reset policy;
-- session/token transport and revocation, including browser-extension authentication;
+- Argon2id password hashes; verified email; one-time expiring email-verification and password-reset tokens stored as hashes; minimum 12-character passwords up to 128 characters; and HMAC-keyed persistent rate limits.
+- Opaque, hashed, revocable PostgreSQL sessions; Secure/HttpOnly/SameSite cookies for the dashboard and bearer tokens for the configured extension.
+- SMTP with TLS for verification and password-reset messages.
+
+Before any existing private endpoint or worker serves authenticated accounts, document and test:
+
 - account ownership and cross-account constraints for every private resource;
-- PostgreSQL transaction, connection-pool, backup, restore, and deployment settings;
+- authorization and cross-account access denial for every private endpoint and background task;
+- PostgreSQL connection-pool, backup, restore, and deployment settings;
 - complete legacy import mapping and the cutover/rollback procedure.
+
+Authentication endpoints alone do not enable multi-user access to the existing SQLite/libSQL/Turso API. PostgreSQL migrations remain explicit operator actions; startup never runs Alembic or imports legacy data.
 
 ## Consequences
 

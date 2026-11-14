@@ -11,6 +11,8 @@ from app.config import Settings, get_settings
 from app.core.build_info import installed_info
 from app.core.paths import settings_paths
 from app.core.version import PRODUCT_VERSION
+from app.infra.postgres.config import AuthSettings, load_postgres_settings
+from app.infra.postgres.sessions import PostgresDatabase
 from app.infra.periodic import PeriodicWorker
 from app.infra.transactions import transaction
 from app.infra.web_push import WebPushSender
@@ -29,45 +31,59 @@ def create_app(settings: Settings, *, resources: RuntimeResources | None = None)
     resources = resources or RuntimeResources(settings_paths(settings))
     paths = resources.paths
     build_info = installed_info(paths.app_dir, packaged=paths.profile == "packaged")
+    auth_settings = AuthSettings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging()
-        with open_runtime(settings, resources, build_info):
-            with transaction(resources.database()) as conn:
-                initialize_staleness(
-                    conn,
-                    ApplicationStaleness(
-                        applied_days=settings.attention_applied_days,
-                        in_process_days=settings.attention_in_process_days,
-                        timezone=settings.stale_notification_timezone,
-                    ),
-                )
-                staleness.reconcile(conn)
+        postgres_settings = load_postgres_settings()
+        postgres_database: PostgresDatabase | None = None
+        if postgres_settings.database_url is not None:
+            auth_settings.require_ready()
+            postgres_database = PostgresDatabase(postgres_settings)
+        app.state.postgres_database = postgres_database
+        try:
+            with open_runtime(settings, resources, build_info):
+                with transaction(resources.database()) as conn:
+                    initialize_staleness(
+                        conn,
+                        ApplicationStaleness(
+                            applied_days=settings.attention_applied_days,
+                            in_process_days=settings.attention_in_process_days,
+                            timezone=settings.stale_notification_timezone,
+                        ),
+                    )
+                    staleness.reconcile(conn)
 
-            def committed() -> None:
-                if resources.push_scheduler is not None:
-                    resources.push_scheduler.notify_write()
+                def committed() -> None:
+                    if resources.push_scheduler is not None:
+                        resources.push_scheduler.notify_write()
 
-            committed()
-            resources.web_push = (
-                WebPushSender(paths.state_dir / "web-push-private.pem", settings.web_push_subject)
-                if settings.web_push_enabled
-                else None
-            )
-            resources.notification_worker = PeriodicWorker(
-                partial(
-                    notification_cycle,
-                    resources.database(),
-                    resources.notification_hub,
-                    committed,
-                    scheduler_enabled=settings.notification_scheduler_enabled,
-                    known={},
-                    push_sender=resources.web_push,
+                committed()
+                resources.web_push = (
+                    WebPushSender(
+                        paths.state_dir / "web-push-private.pem", settings.web_push_subject
+                    )
+                    if settings.web_push_enabled
+                    else None
                 )
-            )
-            resources.notification_worker.start()
-            yield
+                resources.notification_worker = PeriodicWorker(
+                    partial(
+                        notification_cycle,
+                        resources.database(),
+                        resources.notification_hub,
+                        committed,
+                        scheduler_enabled=settings.notification_scheduler_enabled,
+                        known={},
+                        push_sender=resources.web_push,
+                    )
+                )
+                resources.notification_worker.start()
+                yield
+        finally:
+            app.state.postgres_database = None
+            if postgres_database is not None:
+                postgres_database.close()
 
     app = FastAPI(
         title="Job Tracker API",
@@ -80,6 +96,8 @@ def create_app(settings: Settings, *, resources: RuntimeResources | None = None)
     )
     app.state.settings = settings
     app.state.resources = resources
+    app.state.auth_settings = auth_settings
+    app.state.postgres_database = None
     app.state.build_info = build_info
     configure_http(app, settings)
 

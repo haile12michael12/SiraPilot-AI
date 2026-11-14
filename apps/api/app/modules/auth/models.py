@@ -5,7 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,7 +31,9 @@ class User(Base):
 
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
     account_id: Mapped[UUID] = mapped_column(
-        PostgreSQLUUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
@@ -37,6 +49,9 @@ class User(Base):
 class AuthToken(Base):
     __tablename__ = "auth_tokens"
     __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('verification', 'password_reset')", name="purpose_is_supported"
+        ),
         Index("ix_auth_tokens_user_purpose", "user_id", "purpose"),
         Index("ix_auth_tokens_expires_at", "expires_at"),
     )
@@ -72,6 +87,10 @@ class AuthSession(Base):
 
 class AuthRateLimit(Base):
     __tablename__ = "auth_rate_limits"
+    __table_args__ = (
+        CheckConstraint("attempts > 0", name="attempts_positive"),
+        Index("ix_auth_rate_limits_window_started_at", "window_started_at"),
+    )
 
     bucket_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

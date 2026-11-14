@@ -1,6 +1,6 @@
 """Public request and response contracts for account authentication."""
 
-from typing import Annotated, Self
+from typing import Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
@@ -69,9 +69,3 @@ class Verified(BaseModel):
 
 class PasswordUpdated(BaseModel):
     status: str = "password_updated"
-
-
-def reject_email_whitespace(value: str) -> str:
-    if value != value.strip():
-        raise ValueError("email cannot contain surrounding whitespace")
-    return value

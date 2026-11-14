@@ -38,7 +38,7 @@ class LoginResult:
 
 
 def token_digest(token: str) -> str:
-    return hashlib.sha256(token.encode("ascii")).hexdigest()
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _rate_hash(settings: AuthSettings, action: str, value: str) -> str:
@@ -226,6 +226,7 @@ def login(
             user_id=user_id,
             token_hash=token_digest(raw_token),
             expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
+            now=now,
         )
     return (
         LoginResult(

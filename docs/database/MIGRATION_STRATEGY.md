@@ -6,15 +6,17 @@ The released application uses SQLite/libSQL and may optionally synchronize throu
 
 ## Target persistence model
 
-The approved multi-user target uses PostgreSQL as its system of record and Alembic for schema migrations. The initial isolated schema, SQLAlchemy session/transaction layer, and account-scoped job repository are implemented in `apps/api/app/infra/postgres`; the initial revision is `apps/api/alembic/versions/0001_postgres_foundation.py`. This is a major-version, deployment-level change; SQLite/libSQL migration keys are not PostgreSQL migrations and must not be replayed as if they were.
+The approved multi-user target uses PostgreSQL as its system of record and Alembic for schema migrations. The isolated schema, SQLAlchemy session/transaction layer, account-scoped job repository, and opt-in authentication API are implemented in `apps/api/app/infra/postgres` and `apps/api/app/modules/auth`; revisions live in `apps/api/alembic/versions/`. This is a major-version, deployment-level change; SQLite/libSQL migration keys are not PostgreSQL migrations and must not be replayed as if they were.
 
 The initial PostgreSQL schema contains an opaque account ownership key and account-scoped jobs, listings, events, documents, and blocked companies. It deliberately contains no credentials and is not connected to the current API. Before any endpoint serves multiple users:
 
-1. Define the complete PostgreSQL schema, account ownership model, constraints, indexes, and transaction boundaries.
+1. Complete the PostgreSQL schema, account ownership model, constraints, indexes, and transaction boundaries as each feature is implemented.
 2. Extend the Alembic schema and tests against PostgreSQL as new feature data is implemented. SQLite-only tests are not sufficient evidence for PostgreSQL behavior.
 3. Ensure every private row and relationship is owner-scoped in repositories and enforced by database constraints where practical.
-4. Add account authentication and authorization tests, including cross-user access denial for every resource family and background task.
+4. Add authorization and cross-account denial tests for every resource family and background task before exposing it to authenticated accounts. The current authentication endpoints do not authorize existing private routes.
 5. Add an explicit legacy importer and a documented cutover procedure.
+
+The authentication API is enabled only when `POSTGRES_DATABASE_URL` and its `AUTH_*` email and rate-limit settings are configured. It does not run Alembic on startup; operators must apply the PostgreSQL revisions explicitly. Registration and recovery email delivery uses SMTP with TLS, and the auth routes do not change the local SQLite/libSQL/Turso API.
 
 ## Legacy-data import
 

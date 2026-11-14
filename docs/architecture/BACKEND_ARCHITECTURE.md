@@ -68,7 +68,9 @@ The current data access layer has no user ownership boundary. Before a multi-use
 
 Authentication is not authorization: a valid session must be resolved to a principal, and each use case must enforce that principal's ownership. This applies equally to background workers, exports, duplicate matching, notifications, and administrative import tools. The public health and registration endpoints are deliberately separate from private application routes.
 
-The initial account-access choice is self-service registration. Credential format, verification, recovery, rate limiting, session transport, and secret management remain security design requirements; do not implement a partial login flow before those decisions are documented and tested.
+The initial account-access choice is self-service registration. The PostgreSQL authentication module now implements Argon2id credentials, email verification and password recovery through configured TLS SMTP, HMAC-keyed persistent rate limits, and hashed revocable sessions. Dashboard sessions use Secure, HttpOnly, SameSite cookies; the configured browser extension receives an opaque bearer token. Verification and recovery tokens are one-time, expiring, and stored only as hashes.
+
+This authenticates an account only for the authentication endpoints. It does not authorize or change any existing SQLite/libSQL/Turso route, import local data, or make the current application multi-user. Every private resource and worker still needs account ownership and scoped access before multi-user service or cutover.
 
 ## Persistence and migration
 

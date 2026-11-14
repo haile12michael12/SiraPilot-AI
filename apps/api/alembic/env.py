@@ -5,6 +5,7 @@ from sqlalchemy.pool import NullPool
 from alembic import context
 from app.infra.postgres.config import PostgresSettings
 from app.infra.postgres.models import Base
+import app.modules.auth.models  # noqa: F401
 
 config = context.config
 target_metadata = Base.metadata

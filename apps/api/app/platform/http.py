@@ -39,7 +39,9 @@ def _private_path(path: str) -> bool:
     if path.startswith("/api/v1/"):
         path = "/api" + path[len("/api/v1") :]
     return (
-        path == "/api/form-fill"
+        path == "/api/auth"
+        or path.startswith("/api/auth/")
+        or path == "/api/form-fill"
         or path.startswith("/api/form-fill/")
         or path.endswith("/application-workflow")
         or path == "/api/settings"
